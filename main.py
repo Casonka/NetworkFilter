@@ -5,7 +5,6 @@ import os
 import tensorflow as tf
 from tensorflow import keras
 from keras import layers
-from keras.utils import Sequence
 # ------------------------- #
 # Plot library
 import matplotlib.pyplot as plt
@@ -23,39 +22,36 @@ FILEPATH = "datasets/data_20.0.csv"
 # FILEPATH = "datasets/data_50.0.csv"
 # ------------------------- #
 # [Pandas variables]
-TrainData = pd.DataFrame
-TrainLabels = pd.DataFrame
+
 # ------------------------- #
 # [NO WARNINGS]
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 # ------------------------- #
 # [Network parameters]
-SHUFFLE_BUFFER = 500
-BATCH_SIZE = 1
+BATCH_SIZE = 20
 DATA_SIZE = 9
 # ------------------------- #
 # [EPOCHS]
-EPOCHS = 1
-
-
+EPOCHS = 2
 # ------------------------- #
+
 
 # prepare_data() - preparing data frames for network
 def prepare_data(filepath):
     dataset = pd.read_csv(filepath)
-    train_data = dataset.iloc[:, 0:9]
-    target_data = dataset.iloc[:, -6:]
+    train_data = dataset.iloc[:, 0:9].values
+    target_data = dataset.iloc[:, -6:].values
     return train_data, target_data
 
 
 # prepare_model() - preparing architecture network (RNN)
-def prepare_model():
-    inputs = keras.Input(shape=(9, 1), dtype="float64")
-    x = keras.layers.LSTM(32, activation="sigmoid")(inputs)
-    x = keras.layers.Dense(16, activation="sigmoid")(x)
-    outputs = keras.layers.Dense(6, activation="sigmoid")(x)
-    keras_model = keras.Model(inputs, outputs)
-    return keras_model
+def prepare_model(train_data):
+    model = keras.Sequential()
+    model.add(layers.SimpleRNN(units=32, input_shape=(9, 1)))
+    model.add(layers.Dense(units=16, activation="sigmoid"))
+    model.add(layers.Dense(units=6, activation=None))
+    model.compile(optimizer='adam', loss='mean_squared_error', metrics=['mae'])
+    return model
 
 
 # --------------------------------------------------------------------------------------------- #
@@ -74,17 +70,13 @@ class BatchGenerator(tf.keras.utils.Sequence):
 
     def __getitem__(self, idx):
         i = idx * self.batch_size
-        batch_input_data_paths = self.input_data_paths.iloc[i: i + self.batch_size, :]
-        batch_target_data_paths = self.target_data_paths.iloc[i: i + self.batch_size, :]
-        return batch_input_data_paths, batch_target_data_paths
+        x = self.input_data_paths[i: i + self.batch_size, :]
+        y = self.target_data_paths[i: i + self.batch_size, :]
+        return x, y
 
 
 if __name__ == '__main__':
     input_train_paths, input_target_data = prepare_data(FILEPATH)
-    network = prepare_model()
+    network = prepare_model(input_train_paths)
     trainGen = BatchGenerator(BATCH_SIZE, DATA_SIZE, input_train_paths, input_target_data)
-    network.compile(optimizer="rmsprop", loss="sparse_categorical_crossentropy",
-                    metrics=[keras.metrics.SparseCategoricalAccuracy(),
-                             keras.metrics.CategoricalCrossentropy(),
-                             keras.metrics.Accuracy()])
-    history = network.fit(trainGen, epochs=EPOCHS)
+    history = network.fit(trainGen, epochs=EPOCHS, batch_size=BATCH_SIZE)
