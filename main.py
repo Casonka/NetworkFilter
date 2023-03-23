@@ -36,6 +36,18 @@ EPOCHS = 2
 # ------------------------- #
 
 
+# [calculating def's]
+def integrate_accelerometer(accelerometer_data, time_step):
+    accel = accelerometer_data - np.mean(accelerometer_data)
+    velocity = np.cumsum(accelerometer_data) * time_step
+    displacement = np.cumsum(velocity) * time_step
+    return displacement
+
+
+def integrate_gyroscope(gyroscope_data, time_step):
+    delta_angle = np.cumsum(gyroscope_data) * time_step
+    return displaycement
+
 # prepare_data() - preparing data frames for network
 def prepare_data(filepath):
     dataset = pd.read_csv(filepath)
@@ -77,6 +89,8 @@ class BatchGenerator(tf.keras.utils.Sequence):
 
 if __name__ == '__main__':
     input_train_paths, input_target_data = prepare_data(FILEPATH)
+    displacement_accel = integrate_accelerometer(input_train_paths[:, 0:3], input_train_paths[:, 0])
+    displacement_gyro = integrate_gyroscope(input_train_paths[:, 4:6], input_train_paths[:, 0])
     network = prepare_model(input_train_paths)
     trainGen = BatchGenerator(BATCH_SIZE, DATA_SIZE, input_train_paths, input_target_data)
     history = network.fit(trainGen, epochs=EPOCHS, batch_size=BATCH_SIZE)
