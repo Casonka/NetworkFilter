@@ -33,6 +33,8 @@ DATA_SIZE = 9
 # ------------------------- #
 # [EPOCHS]
 EPOCHS = 2
+
+
 # ------------------------- #
 
 
@@ -52,6 +54,10 @@ def prepare_model(train_data):
     model.add(layers.Dense(units=6, activation=None))
     model.compile(optimizer='adam', loss='mean_squared_error', metrics=['mae'])
     return model
+
+
+def filter_low_freq_show(filepath):
+    file = pd.read_csv(filepath)
 
 
 # --------------------------------------------------------------------------------------------- #
