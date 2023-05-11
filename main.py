@@ -37,16 +37,6 @@ EPOCHS = 2
 
 
 # [calculating def's]
-def integrate_accelerometer(accelerometer_data, time_step):
-    accel = accelerometer_data - np.mean(accelerometer_data)
-    velocity = np.cumsum(accelerometer_data) * time_step
-    displacement = np.cumsum(velocity) * time_step
-    return displacement
-
-
-def integrate_gyroscope(gyroscope_data, time_step):
-    delta_angle = np.cumsum(gyroscope_data) * time_step
-    return displaycement
 
 # prepare_data() - preparing data frames for network
 def prepare_data(filepath):
@@ -59,14 +49,71 @@ def prepare_data(filepath):
 # prepare_model() - preparing architecture network (RNN)
 def prepare_model(train_data):
     model = keras.Sequential()
-    model.add(layers.SimpleRNN(units=32, input_shape=(9, 1)))
-    model.add(layers.Dense(units=16, activation="sigmoid"))
-    model.add(layers.Dense(units=6, activation=None))
+    model.add(layers.SimpleRNN(name="rnn_layer_1", units=32, input_shape=(9, 1)))
+    model.add(layers.Dense(name="dense_layer_2", units=16, activation="sigmoid"))
+    model.add(layers.Dense(name="dense_layer_3", units=6, activation=None))
     model.compile(optimizer='adam', loss='mean_squared_error', metrics=['mae'])
     return model
 
 
 # --------------------------------------------------------------------------------------------- #
+
+class CustomCallback(tf.keras.callbacks.Callback):
+    def on_train_begin(self, logs=None):
+        keys = list(logs.keys())
+        print("Starting training; got log keys: {}".format(keys))
+
+    def on_train_end(self, logs=None):
+        keys = list(logs.keys())
+        print("Stop training; got log keys: {}".format(keys))
+
+    def on_epoch_begin(self, epoch, logs=None):
+        keys = list(logs.keys())
+        print("Start epoch {} of training; got log keys: {}".format(epoch, keys))
+
+    def on_epoch_end(self, epoch, logs=None):
+        keys = list(logs.keys())
+        print("End epoch {} of training; got log keys: {}".format(epoch, keys))
+
+    def on_test_begin(self, logs=None):
+        keys = list(logs.keys())
+        print("Start testing; got log keys: {}".format(keys))
+
+    def on_test_end(self, logs=None):
+        keys = list(logs.keys())
+        print("Stop testing; got log keys: {}".format(keys))
+
+    def on_predict_begin(self, logs=None):
+        keys = list(logs.keys())
+        print("Start predicting; got log keys: {}".format(keys))
+
+    def on_predict_end(self, logs=None):
+        keys = list(logs.keys())
+        print("Stop predicting; got log keys: {}".format(keys))
+
+    def on_train_batch_begin(self, batch, logs=None):
+        keys = list(logs.keys())
+        print("...Training: start of batch {}; got log keys: {}".format(batch, keys))
+
+    def on_train_batch_end(self, batch, logs=None):
+        keys = list(logs.keys())
+        print("...Training: end of batch {}; got log keys: {}".format(batch, keys))
+
+    def on_test_batch_begin(self, batch, logs=None):
+        keys = list(logs.keys())
+        print("...Evaluating: start of batch {}; got log keys: {}".format(batch, keys))
+
+    def on_test_batch_end(self, batch, logs=None):
+        keys = list(logs.keys())
+        print("...Evaluating: end of batch {}; got log keys: {}".format(batch, keys))
+
+    def on_predict_batch_begin(self, batch, logs=None):
+        keys = list(logs.keys())
+        print("...Predicting: start of batch {}; got log keys: {}".format(batch, keys))
+
+    def on_predict_batch_end(self, batch, logs=None):
+        keys = list(logs.keys())
+        print("...Predicting: end of batch {}; got log keys: {}".format(batch, keys))
 
 
 # Batch Generator Class
@@ -88,9 +135,17 @@ class BatchGenerator(tf.keras.utils.Sequence):
 
 
 if __name__ == '__main__':
-    input_train_paths, input_target_data = prepare_data(FILEPATH)
-    displacement_accel = integrate_accelerometer(input_train_paths[:, 0:3], input_train_paths[:, 0])
-    displacement_gyro = integrate_gyroscope(input_train_paths[:, 4:6], input_train_paths[:, 0])
+    # input_train_paths, input_target_data = prepare_data(FILEPATH)
+    input_paths, target_paths = prepare_data(FILEPATH)
+    input_train_paths = input_paths[0 : 300]
+    target_train_paths = target_paths[0 : 300]
+    input_val_paths = input_paths[300 :]
+    target_val_paths = target_paths[300 :]
     network = prepare_model(input_train_paths)
-    trainGen = BatchGenerator(BATCH_SIZE, DATA_SIZE, input_train_paths, input_target_data)
-    history = network.fit(trainGen, epochs=EPOCHS, batch_size=BATCH_SIZE)
+    network.summary()
+    trainGen = BatchGenerator(BATCH_SIZE, DATA_SIZE, input_train_paths, target_train_paths)
+    valGen = BatchGenerator(BATCH_SIZE, DATA_SIZE, input_val_paths, target_val_paths)
+    network_callback = CustomCallback()
+    history = network.fit(trainGen, epochs=EPOCHS, batch_size=BATCH_SIZE, validation_data=valGen, callbacks=network_callback)
+    network.save('model/')
+    network.predict()
