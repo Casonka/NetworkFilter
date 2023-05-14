@@ -1,5 +1,7 @@
 # System includes
 import os
+from abc import ABC
+
 # ------------------------- #
 # TensorFlow includes
 import tensorflow as tf
@@ -16,10 +18,10 @@ import pandas as pd
 
 # ------------------------- #
 # Dataset Files
-FILEPATH = "datasets/data_20.0.csv"
-# FILEPATH = "datasets/data_30.0.csv"
-# FILEPATH = "datasets/data_40.0.csv"
-# FILEPATH = "datasets/data_50.0.csv"
+# FILEPATH = "datasets/data_20.0.csv"
+FILEPATH = "datasets/data_30.0.csv"
+# FILEPATH = "data_40.0.csv"
+# FILEPATH = "data_50.0.csv"
 # ------------------------- #
 # [Pandas variables]
 
@@ -28,93 +30,21 @@ FILEPATH = "datasets/data_20.0.csv"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 # ------------------------- #
 # [Network parameters]
-BATCH_SIZE = 20
-DATA_SIZE = 9
+BATCH_SIZE = 1
+DATA_SIZE = 6
 # ------------------------- #
 # [EPOCHS]
-EPOCHS = 2
-# ------------------------- #
+EPOCHS = 1
 
-
-# [calculating def's]
-
-# prepare_data() - preparing data frames for network
-def prepare_data(filepath):
-    dataset = pd.read_csv(filepath)
-    train_data = dataset.iloc[:, 0:9].values
-    target_data = dataset.iloc[:, -6:].values
-    return train_data, target_data
-
-
-# prepare_model() - preparing architecture network (RNN)
-def prepare_model(train_data):
-    model = keras.Sequential()
-    model.add(layers.SimpleRNN(name="rnn_layer_1", units=32, input_shape=(9, 1)))
-    model.add(layers.Dense(name="dense_layer_2", units=16, activation="sigmoid"))
-    model.add(layers.Dense(name="dense_layer_3", units=6, activation=None))
-    model.compile(optimizer='adam', loss='mean_squared_error', metrics=['mae'])
-    return model
-
-
-# --------------------------------------------------------------------------------------------- #
 
 class CustomCallback(tf.keras.callbacks.Callback):
-    def on_train_begin(self, logs=None):
-        keys = list(logs.keys())
-        print("Starting training; got log keys: {}".format(keys))
 
     def on_train_end(self, logs=None):
         keys = list(logs.keys())
         print("Stop training; got log keys: {}".format(keys))
 
-    def on_epoch_begin(self, epoch, logs=None):
-        keys = list(logs.keys())
-        print("Start epoch {} of training; got log keys: {}".format(epoch, keys))
-
     def on_epoch_end(self, epoch, logs=None):
         keys = list(logs.keys())
-        print("End epoch {} of training; got log keys: {}".format(epoch, keys))
-
-    def on_test_begin(self, logs=None):
-        keys = list(logs.keys())
-        print("Start testing; got log keys: {}".format(keys))
-
-    def on_test_end(self, logs=None):
-        keys = list(logs.keys())
-        print("Stop testing; got log keys: {}".format(keys))
-
-    def on_predict_begin(self, logs=None):
-        keys = list(logs.keys())
-        print("Start predicting; got log keys: {}".format(keys))
-
-    def on_predict_end(self, logs=None):
-        keys = list(logs.keys())
-        print("Stop predicting; got log keys: {}".format(keys))
-
-    def on_train_batch_begin(self, batch, logs=None):
-        keys = list(logs.keys())
-        print("...Training: start of batch {}; got log keys: {}".format(batch, keys))
-
-    def on_train_batch_end(self, batch, logs=None):
-        keys = list(logs.keys())
-        print("...Training: end of batch {}; got log keys: {}".format(batch, keys))
-
-    def on_test_batch_begin(self, batch, logs=None):
-        keys = list(logs.keys())
-        print("...Evaluating: start of batch {}; got log keys: {}".format(batch, keys))
-
-    def on_test_batch_end(self, batch, logs=None):
-        keys = list(logs.keys())
-        print("...Evaluating: end of batch {}; got log keys: {}".format(batch, keys))
-
-    def on_predict_batch_begin(self, batch, logs=None):
-        keys = list(logs.keys())
-        print("...Predicting: start of batch {}; got log keys: {}".format(batch, keys))
-
-    def on_predict_batch_end(self, batch, logs=None):
-        keys = list(logs.keys())
-        print("...Predicting: end of batch {}; got log keys: {}".format(batch, keys))
-
 
 # Batch Generator Class
 class BatchGenerator(tf.keras.utils.Sequence):
@@ -134,18 +64,69 @@ class BatchGenerator(tf.keras.utils.Sequence):
         return x, y
 
 
+# ------------------------- #
+# [calculating def's]
+
+# prepare_data() - preparing data frames for network
+def prepare_data(filepath):
+    dataset = pd.read_csv(filepath)
+    size = len(dataset.index)
+
+    tmp = dataset.iloc[:, 1:7].values
+
+    trainX_data = tmp[: round(size * 0.7)]
+    validationX_data = tmp[round(size * 0.7):]
+
+    validationY_data = dataset.iloc[:, -6:].values[: round(size * 0.7)]
+    trainY_data = dataset.iloc[:, -6:].values[round(size * 0.7):]
+    return trainX_data, validationX_data, trainY_data, validationY_data
+
+
+# prepare_model() - preparing architecture network (RNN)
+def prepare_model():
+    tmp_model = keras.Sequential()
+    tmp_model.add(layers.SimpleRNN(batch_size=BATCH_SIZE, name="rnn_layer_1", units=32, input_shape=(6, 1)))
+    tmp_model.add(layers.Dense(batch_size=BATCH_SIZE, name="dense_layer_2", units=16, activation="sigmoid"))
+    tmp_model.add(layers.Dense(batch_size=BATCH_SIZE, name="dense_layer_3", units=6, activation=None))
+    tmp_model.compile(optimizer=keras.optimizers.Adam(0.001), loss='mean_squared_error', metrics=['mse'])
+    return tmp_model
+
+
+# --------------------------------------------------------------------------------------------- #
+
+
 if __name__ == '__main__':
-    # input_train_paths, input_target_data = prepare_data(FILEPATH)
-    input_paths, target_paths = prepare_data(FILEPATH)
-    input_train_paths = input_paths[0 : 300]
-    target_train_paths = target_paths[0 : 300]
-    input_val_paths = input_paths[300 :]
-    target_val_paths = target_paths[300 :]
-    network = prepare_model(input_train_paths)
-    network.summary()
-    trainGen = BatchGenerator(BATCH_SIZE, DATA_SIZE, input_train_paths, target_train_paths)
-    valGen = BatchGenerator(BATCH_SIZE, DATA_SIZE, input_val_paths, target_val_paths)
-    network_callback = CustomCallback()
-    history = network.fit(trainGen, epochs=EPOCHS, batch_size=BATCH_SIZE, validation_data=valGen, callbacks=network_callback)
-    network.save('model/')
-    network.predict()
+    # Preparing train and validation data
+    # --------------------------------#
+    train_valX_paths, validation_valX_paths, train_valY_paths, \
+        validation_valY_paths = prepare_data(FILEPATH)
+
+    # Prepare and compile model
+    # --------------------------------#
+    model = prepare_model()
+    model.summary()
+
+    # Prepare train and validation batch generators
+    # --------------------------------#
+    trainGen = BatchGenerator(BATCH_SIZE, DATA_SIZE, train_valX_paths, train_valY_paths)
+    valGen = BatchGenerator(BATCH_SIZE, DATA_SIZE, validation_valX_paths, validation_valY_paths)
+
+    epoch_callback = CustomCallback()
+    model_checkpoint_callback = keras.callbacks.ModelCheckpoint(filepath='model/my_model.h5', save_best_only=True,
+                                                                verbose=1, monitor='val_mse')
+
+    history = model.fit(trainGen, epochs=EPOCHS, batch_size=BATCH_SIZE, validation_data=valGen,
+                        callbacks=[epoch_callback, model_checkpoint_callback])
+
+    check_dataset = pd.read_csv("datasets/data_20.0.csv")
+    time = check_dataset.iloc[350:400, 0].values
+    check_data = check_dataset.iloc[350:400, 1].values
+    buffer = np.zeros([50, 6])
+
+    for i in range(50):
+        test_data = check_dataset.iloc[350+i, 1:7]
+        predict = model.predict(test_data)
+        buffer[i, :] = predict
+
+    plt.plot(time, check_data, color="blue")
+    plt.plot(time, buffer[:, 1], color="orange")
