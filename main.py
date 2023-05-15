@@ -1,7 +1,7 @@
 # System includes
 import os
 from abc import ABC
-
+import navigation
 # ------------------------- #
 # TensorFlow includes
 import tensorflow as tf
@@ -38,13 +38,9 @@ EPOCHS = 1
 
 
 class CustomCallback(tf.keras.callbacks.Callback):
-
-    def on_train_end(self, logs=None):
-        keys = list(logs.keys())
-        print("Stop training; got log keys: {}".format(keys))
-
     def on_epoch_end(self, epoch, logs=None):
         keys = list(logs.keys())
+
 
 # Batch Generator Class
 class BatchGenerator(tf.keras.utils.Sequence):
@@ -74,28 +70,42 @@ def prepare_data(filepath):
 
     tmp = dataset.iloc[:, 1:7].values
 
+    navigation.new_calc(dataset)
     trainX_data = tmp[: round(size * 0.7)]
     validationX_data = tmp[round(size * 0.7):]
 
-    validationY_data = dataset.iloc[:, -6:].values[: round(size * 0.7)]
-    trainY_data = dataset.iloc[:, -6:].values[round(size * 0.7):]
+    validationY_data = dataset.iloc[:, 11:13].values[round(size * 0.7):]
+    trainY_data = dataset.iloc[:, 11:13].values[: round(size * 0.7)]
     return trainX_data, validationX_data, trainY_data, validationY_data
 
 
 # prepare_model() - preparing architecture network (RNN)
 def prepare_model():
     tmp_model = keras.Sequential()
-    tmp_model.add(layers.SimpleRNN(batch_size=BATCH_SIZE, name="rnn_layer_1", units=32, input_shape=(6, 1)))
-    tmp_model.add(layers.Dense(batch_size=BATCH_SIZE, name="dense_layer_2", units=16, activation="sigmoid"))
-    tmp_model.add(layers.Dense(batch_size=BATCH_SIZE, name="dense_layer_3", units=6, activation=None))
-    tmp_model.compile(optimizer=keras.optimizers.Adam(0.001), loss='mean_squared_error', metrics=['mse'])
+    tmp_model.add(layers.Embedding(batch_size=BATCH_SIZE,
+                                   name="embedding_layer_1",
+                                   input_shape=(3, 1),
+                                   output_dim=8))
+    tmp_model.add(layers.GRU(batch_size=BATCH_SIZE,
+                             name="gru_layer_2",
+                             units=16,
+                             input_shape=(6, 1),
+                             return_sequences=True))
+    tmp_model.add(layers.Dense(batch_size=BATCH_SIZE,
+                               name="dense_layer_3",
+                               units=16,
+                               activation="sigmoid"))
+    tmp_model.add(layers.Dense(batch_size=BATCH_SIZE,
+                               name="dense_layer_4",
+                               units=2,
+                               activation=None))
+    tmp_model.compile(optimizer=keras.optimizers.Adam(0.001), loss="mean_squared_error")
     return tmp_model
 
 
 # --------------------------------------------------------------------------------------------- #
-
-
 if __name__ == '__main__':
+    matplotlib.use('Qt5Agg')
     # Preparing train and validation data
     # --------------------------------#
     train_valX_paths, validation_valX_paths, train_valY_paths, \
@@ -112,11 +122,9 @@ if __name__ == '__main__':
     valGen = BatchGenerator(BATCH_SIZE, DATA_SIZE, validation_valX_paths, validation_valY_paths)
 
     epoch_callback = CustomCallback()
-    model_checkpoint_callback = keras.callbacks.ModelCheckpoint(filepath='model/my_model.h5', save_best_only=True,
-                                                                verbose=1, monitor='val_mse')
 
     history = model.fit(trainGen, epochs=EPOCHS, batch_size=BATCH_SIZE, validation_data=valGen,
-                        callbacks=[epoch_callback, model_checkpoint_callback])
+                        callbacks=epoch_callback)
 
     check_dataset = pd.read_csv("datasets/data_20.0.csv")
     time = check_dataset.iloc[350:400, 0].values
@@ -124,9 +132,11 @@ if __name__ == '__main__':
     buffer = np.zeros([50, 6])
 
     for i in range(50):
-        test_data = check_dataset.iloc[350+i, 1:7]
+        test_data = check_dataset.iloc[350:400, 1:7].values[i:i + 1]
         predict = model.predict(test_data)
         buffer[i, :] = predict
 
     plt.plot(time, check_data, color="blue")
     plt.plot(time, buffer[:, 1], color="orange")
+    plt.grid()
+    plt.show()

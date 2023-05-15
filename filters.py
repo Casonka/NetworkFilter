@@ -22,10 +22,10 @@ FILEPATH = "datasets/data_20.0.csv"
 # FILEPATH = "datasets/data_50.0.csv"
 # ------------------------- #
 # Item group variable
-ITEMS = 64
+ITEMS = 10000
 DEF_K = 0.6
-MEDIAN_WINDOW_SIZE = 4
-MOVING_AVERAGE_SIZE = 4
+MEDIAN_WINDOW_SIZE = 12
+MOVING_AVERAGE_SIZE = 10
 
 
 # ------------------------- #
@@ -356,4 +356,4 @@ if __name__ == '__main__':
     # low_pass_filter_demo(accelerometer, timestamp)
     # median_filter_show(accelerometer, gyroscope, timestamp)
     # median_filter_demo(accelerometer, timestamp)
-    moving_average_demo(accelerometer, timestamp)
+    # moving_average_filter_calc(accelerometer, timestamp)
