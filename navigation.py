@@ -38,43 +38,61 @@ def calc_position(data):
     return result
 
 
-def new_calc(data):
-    steering_wheel_last = data.iloc[0, 13]
-    offset_x = data.iloc[0, 11]
-    offset_y = data.iloc[0, 12]
-    x0 = 0
-    y0 = 0
-    dt = 0.05
-    result = np.zeros([len(data), 6])
-    for i in range(len(data)):
-        speed = -data.iloc[i, 8] * 0.277778
-        steering_wheel = steering_wheel_last + data.iloc[i, 13] * 1.1
-        if i > 20:
-            if speed < -0.00:
-                delta_velocityX = speed * math.cos(steering_wheel)
-                delta_velocityY = speed * math.sin(steering_wheel)
-            else:
-                delta_velocityX = 0
-                delta_velocityY = 0
-        else:
-            delta_velocityX = 0
-            delta_velocityY = 0
-        accelX = delta_velocityX / dt
-        accelY = delta_velocityY / dt
+def calc_delta_from_accel_gyro(dt, accelX, accelY, gyroZ, real_angle, prev_coordX, prev_coordY, velocityX, velocityY):
+    velocityX += -accelX * dt
+    velocityY += -accelY * dt
 
-        x = x0 + delta_velocityX * dt
-        y = y0 + delta_velocityY * dt
+    delta_angle = -gyroZ * dt
+    angle = real_angle + delta_angle
 
-        x0 = x
-        y0 = y
+    linear_acceleration = math.sqrt(accelX**2 + accelY**2)
+    delta_velocityX = linear_acceleration * math.sin(angle) * dt
+    delta_velocityY = linear_acceleration * math.cos(angle) * dt
 
-        steering_wheel_last = steering_wheel
+    velocityX += delta_velocityX
+    velocityY += delta_velocityY
+    posX = prev_coordX + velocityX * dt
+    posY = prev_coordY + velocityY * dt
 
-        result[i, 0] = accelX
-        result[i, 1] = accelY
-        result[i, 2] = data.iloc[i, 11]
-        result[i, 3] = data.iloc[i, 12]
-        result[i, 4] = x + offset_x
-        result[i, 5] = y + offset_y
+    return posX, posY
 
-    print(0)
+# def new_calc(data):
+#     steering_wheel_last = data.iloc[0, 13]
+#     offset_x = data.iloc[0, 11]
+#     offset_y = data.iloc[0, 12]
+#     x0 = 0
+#     y0 = 0
+#     dt = 0.05
+#     result = np.zeros([len(data), 6])
+#     for i in range(len(data)):
+#         speed = -data.iloc[i, 8] * 0.277778
+#         steering_wheel = steering_wheel_last + data.iloc[i, 13] * 1.1
+#         if i > 20:
+#             if speed < -0.00:
+#                 delta_velocityX = speed * math.cos(steering_wheel)
+#                 delta_velocityY = speed * math.sin(steering_wheel)
+#             else:
+#                 delta_velocityX = 0
+#                 delta_velocityY = 0
+#         else:
+#             delta_velocityX = 0
+#             delta_velocityY = 0
+#         accelX = delta_velocityX / dt
+#         accelY = delta_velocityY / dt
+#
+#         x = x0 + delta_velocityX * dt
+#         y = y0 + delta_velocityY * dt
+#
+#         x0 = x
+#         y0 = y
+#
+#         steering_wheel_last = steering_wheel
+#
+#         result[i, 0] = accelX
+#         result[i, 1] = accelY
+#         result[i, 2] = data.iloc[i, 11]
+#         result[i, 3] = data.iloc[i, 12]
+#         result[i, 4] = x + offset_x
+#         result[i, 5] = y + offset_y
+#
+#     print(0)
