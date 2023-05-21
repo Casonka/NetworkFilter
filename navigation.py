@@ -1,6 +1,10 @@
 import math
 import numpy as np
+import pandas as pd
+
 import filters
+import matplotlib.pyplot as plt
+import matplotlib
 
 
 def get_start_pos(data):
@@ -39,13 +43,10 @@ def calc_position(data):
 
 
 def calc_delta_from_accel_gyro(dt, accelX, accelY, gyroZ, real_angle, prev_coordX, prev_coordY, velocityX, velocityY):
-    velocityX += -accelX * dt
-    velocityY += -accelY * dt
-
-    delta_angle = -gyroZ * dt
+    delta_angle = gyroZ * dt
     angle = real_angle + delta_angle
 
-    linear_acceleration = math.sqrt(accelX**2 + accelY**2)
+    linear_acceleration = math.sqrt(accelX ** 2 + accelY ** 2)
     delta_velocityX = linear_acceleration * math.sin(angle) * dt
     delta_velocityY = linear_acceleration * math.cos(angle) * dt
 
@@ -56,43 +57,36 @@ def calc_delta_from_accel_gyro(dt, accelX, accelY, gyroZ, real_angle, prev_coord
 
     return posX, posY
 
-# def new_calc(data):
-#     steering_wheel_last = data.iloc[0, 13]
-#     offset_x = data.iloc[0, 11]
-#     offset_y = data.iloc[0, 12]
-#     x0 = 0
-#     y0 = 0
-#     dt = 0.05
-#     result = np.zeros([len(data), 6])
-#     for i in range(len(data)):
-#         speed = -data.iloc[i, 8] * 0.277778
-#         steering_wheel = steering_wheel_last + data.iloc[i, 13] * 1.1
-#         if i > 20:
-#             if speed < -0.00:
-#                 delta_velocityX = speed * math.cos(steering_wheel)
-#                 delta_velocityY = speed * math.sin(steering_wheel)
-#             else:
-#                 delta_velocityX = 0
-#                 delta_velocityY = 0
-#         else:
-#             delta_velocityX = 0
-#             delta_velocityY = 0
-#         accelX = delta_velocityX / dt
-#         accelY = delta_velocityY / dt
-#
-#         x = x0 + delta_velocityX * dt
-#         y = y0 + delta_velocityY * dt
-#
-#         x0 = x
-#         y0 = y
-#
-#         steering_wheel_last = steering_wheel
-#
-#         result[i, 0] = accelX
-#         result[i, 1] = accelY
-#         result[i, 2] = data.iloc[i, 11]
-#         result[i, 3] = data.iloc[i, 12]
-#         result[i, 4] = x + offset_x
-#         result[i, 5] = y + offset_y
-#
-#     print(0)
+
+def visualise_gps(time, gpsX, gpsY, realX, realY):
+    plt.subplot(2, 1, 1)
+    plt.plot(time, gpsX, color="green", linewidth=3)
+    plt.plot(time, realX, color="orange", linewidth=2)
+    plt.xlabel("Время, сек")
+    plt.ylabel("Положение по Х")
+    plt.grid()
+
+    plt.subplot(2, 1, 2)
+    plt.plot(time, gpsY, color="green", linewidth=3)
+    plt.plot(time, realY, color="orange", linewidth=2)
+    plt.xlabel("Время, сек")
+    plt.ylabel("Положение по Y")
+    plt.grid()
+    plt.show()
+
+
+if __name__ == '__main__':
+    # Using Qt backend on plots
+    matplotlib.use('Qt5Agg')
+    # Read file as Pandas series type
+    datafile = pd.read_csv("datasets/data_12.0.csv")
+    # Read parameters as time, accel, gyro, gps, real_coord
+    timestamp = datafile.iloc[:, 0]
+    accelX, accelY = datafile.iloc[:, 1], datafile.iloc[:, 2]
+    gyroZ = datafile.iloc[:, 6]
+    gpsX, gpsY = datafile.iloc[:, 9], datafile.iloc[:, 10]
+    real_coordX, real_coordY = datafile[:, 11], datafile.iloc[:, 12]
+
+
+    visualise_gps(datafile.iloc[:, 0], datafile.iloc[:, 9], datafile.iloc[:, 10], datafile.iloc[:, 11],
+                  datafile.iloc[:, 12])

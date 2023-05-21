@@ -18,22 +18,21 @@ import pandas as pd
 
 # ------------------------- #
 # Dataset Files
-# FILEPATH = "datasets/data_20.0.csv"
-FILEPATH = "datasets/data_30.0.csv"
-# FILEPATH = "data_40.0.csv"
-# FILEPATH = "data_50.0.csv"
+FILEPATH = "datasets/"
 # ------------------------- #
 # [Pandas variables]
-
+X_PARAMS = ['accelX', 'accelY', 'gyroZ']
+Y_PARAMS = ['true_deltaX', 'true_deltaY']
 # ------------------------- #
 # [NO WARNINGS]
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 # ------------------------- #
 # [Network parameters]
-BATCH_SIZE = 1
-DATA_SIZE = 6
-# ------------------------- #
-# [EPOCHS]
+BATCH_SIZE = 25
+INPUT_PARAMETERS = 3
+OUTPUT_PARAMETERS = 2
+TIME_INTERVAL_MS = 200  # milliseconds
+TIME_TO_VARIABLE = int(TIME_INTERVAL_MS / 50)  # variables to shapes
 EPOCHS = 1
 
 
@@ -44,62 +43,60 @@ class CustomCallback(tf.keras.callbacks.Callback):
 
 # Batch Generator Class
 class BatchGenerator(tf.keras.utils.Sequence):
-    def __init__(self, batch, data_size, input_data_paths, target_data_paths):
-        self.batch_size = batch
-        self.data_size = data_size
+    def __init__(self, input_data_paths, target_data_paths):
         self.input_data_paths = input_data_paths
         self.target_data_paths = target_data_paths
 
     def __len__(self):
-        return len(self.target_data_paths) // self.batch_size
+        return len(self.target_data_paths // TIME_TO_VARIABLE) // BATCH_SIZE
 
     def __getitem__(self, idx):
-        i = idx * self.batch_size
-        x = self.input_data_paths[i: i + self.batch_size, :]
-        y = self.target_data_paths[i: i + self.batch_size, :]
+        x = np.zeros((0, TIME_TO_VARIABLE, INPUT_PARAMETERS))
+        y = np.zeros((0, OUTPUT_PARAMETERS))
+        for i in range(BATCH_SIZE):
+            index = i * TIME_TO_VARIABLE
+            temp = self.input_data_paths[index: index + TIME_TO_VARIABLE]
+            temp = np.expand_dims(temp, 0)
+            x = np.append(x, temp, 0)
+
+            temp = self.target_data_paths[index + TIME_TO_VARIABLE - 1]
+            temp = np.expand_dims(temp, 0)
+            y = np.append(y, temp, 0)
         return x, y
 
 
 # ------------------------- #
 # [calculating def's]
-
 # prepare_data() - preparing data frames for network
-def prepare_data(filepath):
-    dataset = pd.read_csv(filepath)
-    size = len(dataset.index)
+def prepare_dataset(filepath):
+    tempX_data = np.zeros([0, INPUT_PARAMETERS])
+    tempY_data = np.zeros([0, OUTPUT_PARAMETERS])
+    for i, file in enumerate(os.listdir(FILEPATH)):
+        if file.endswith(".csv"):
+            temp = pd.read_csv(FILEPATH + file)
+            y = temp[Y_PARAMS].shift(-1).drop(labels=[temp.count()[0] - 1]).values
+            x = temp[X_PARAMS].drop(labels=[temp.count()[0] - 1]).values
+            tempY_data = np.append(tempY_data, y, 0)
+            tempX_data = np.append(tempX_data, x, 0)
 
-    tmp = dataset.iloc[:, 1:7].values
+    size = tempX_data.shape[0]
 
-    navigation.new_calc(dataset)
-    trainX_data = tmp[: round(size * 0.7)]
-    validationX_data = tmp[round(size * 0.7):]
-
-    validationY_data = dataset.iloc[:, 11:13].values[round(size * 0.7):]
-    trainY_data = dataset.iloc[:, 11:13].values[: round(size * 0.7)]
-    return trainX_data, validationX_data, trainY_data, validationY_data
+    return tempX_data[:round(size * 0.7)], tempX_data[round(size * 0.7):], \
+        tempY_data[:round(size * 0.7)], tempY_data[round(size * 0.7):]
 
 
 # prepare_model() - preparing architecture network (RNN)
-def prepare_model():
-    tmp_model = keras.Sequential()
-    tmp_model.add(layers.Embedding(batch_size=BATCH_SIZE,
-                                   name="embedding_layer_1",
-                                   input_shape=(3, 1),
-                                   output_dim=8))
-    tmp_model.add(layers.GRU(batch_size=BATCH_SIZE,
-                             name="gru_layer_2",
-                             units=16,
-                             input_shape=(6, 1),
-                             return_sequences=True))
-    tmp_model.add(layers.Dense(batch_size=BATCH_SIZE,
-                               name="dense_layer_3",
-                               units=16,
-                               activation="sigmoid"))
-    tmp_model.add(layers.Dense(batch_size=BATCH_SIZE,
-                               name="dense_layer_4",
-                               units=2,
-                               activation=None))
-    tmp_model.compile(optimizer=keras.optimizers.Adam(0.001), loss="mean_squared_error")
+def get_model():
+    try:
+        tmp_model = keras.models.load_model("model/model.h5")
+    except IOError:
+        print("No such h5 model file, creating new model")
+        tmp_model = keras.Sequential(name="model")
+        tmp_model.add(layers.InputLayer(batch_input_shape=(None, None, INPUT_PARAMETERS), name="input_1"))
+        tmp_model.add(layers.Dense(6, activation="tanh", name="dense_2"))
+        tmp_model.add(layers.LSTM(12, name="lstm_3"))
+        tmp_model.add(layers.Dense(2, name="dense_4"))
+        tmp_model.compile(optimizer=keras.optimizers.Adam(0.001), loss=["mse"], metrics=["mse", "mae"])
     return tmp_model
 
 
@@ -109,34 +106,44 @@ if __name__ == '__main__':
     # Preparing train and validation data
     # --------------------------------#
     train_valX_paths, validation_valX_paths, train_valY_paths, \
-        validation_valY_paths = prepare_data(FILEPATH)
+        validation_valY_paths = prepare_dataset(FILEPATH)
 
     # Prepare and compile model
     # --------------------------------#
-    model = prepare_model()
+    model = get_model()
     model.summary()
 
     # Prepare train and validation batch generators
     # --------------------------------#
-    trainGen = BatchGenerator(BATCH_SIZE, DATA_SIZE, train_valX_paths, train_valY_paths)
-    valGen = BatchGenerator(BATCH_SIZE, DATA_SIZE, validation_valX_paths, validation_valY_paths)
+    trainGen = BatchGenerator(train_valX_paths, train_valY_paths)
+    valGen = BatchGenerator(validation_valX_paths, validation_valY_paths)
 
     epoch_callback = CustomCallback()
+    model_checkpoint = keras.callbacks.ModelCheckpoint(filepath="model/model.h5", save_best_only=True,
+                                                       monitor="val_loss", mode="min")
+    early_stopping = keras.callbacks.EarlyStopping(monitor="val_loss", patience=3, mode="min")
 
-    history = model.fit(trainGen, epochs=EPOCHS, batch_size=BATCH_SIZE, validation_data=valGen,
-                        callbacks=epoch_callback)
+    callbacks = [epoch_callback, model_checkpoint, early_stopping]
 
-    check_dataset = pd.read_csv("datasets/data_20.0.csv")
-    time = check_dataset.iloc[350:400, 0].values
-    check_data = check_dataset.iloc[350:400, 1].values
-    buffer = np.zeros([50, 6])
+    history = model.fit(trainGen, epochs=EPOCHS, validation_data=valGen, callbacks=callbacks)
 
-    for i in range(50):
-        test_data = check_dataset.iloc[350:400, 1:7].values[i:i + 1]
-        predict = model.predict(test_data)
-        buffer[i, :] = predict
+    # Convert the model to tflite format.
+    converter = tf.lite.TFLiteConverter.from_keras_model(model)
+    converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS,
+                                           tf.lite.OpsSet.SELECT_TF_OPS]
+    converter._experimental_lower_tensor_list_ops = False
+    tflite_model = converter.convert()
 
-    plt.plot(time, check_data, color="blue")
-    plt.plot(time, buffer[:, 1], color="orange")
-    plt.grid()
+    # Save the model.
+    with open('model/model.tflite', 'wb') as f:
+        f.write(tflite_model)
+
+    plt.plot(history.history['mse'])
+    plt.plot(history.history['val_mse'])
+    plt.title('Model mean squared error')
+    plt.ylabel('MSE')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'Test'], loc='upper left')
     plt.show()
+
+
