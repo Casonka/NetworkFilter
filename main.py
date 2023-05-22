@@ -7,6 +7,7 @@ import navigation
 import tensorflow as tf
 from tensorflow import keras
 from keras import layers
+from tensorflow.lite.python.util import convert_bytes_to_c_source
 # ------------------------- #
 # Plot library
 import matplotlib.pyplot as plt
@@ -28,12 +29,16 @@ Y_PARAMS = ['true_deltaX', 'true_deltaY']
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 # ------------------------- #
 # [Network parameters]
-BATCH_SIZE = 25
-INPUT_PARAMETERS = 3
-OUTPUT_PARAMETERS = 2
-TIME_INTERVAL_MS = 200  # milliseconds
+BATCH_SIZE = 5
+INPUT_PARAMETERS = len(X_PARAMS)
+OUTPUT_PARAMETERS = len(Y_PARAMS)
+TIME_INTERVAL_MS = 250  # milliseconds
 TIME_TO_VARIABLE = int(TIME_INTERVAL_MS / 50)  # variables to shapes
-EPOCHS = 1
+EPOCHS = 25
+# [Convert and visualise features]
+IS_CONVERT_LITE = True
+IS_VISUALISE = True
+IS_TRAIN = False
 
 
 class CustomCallback(tf.keras.callbacks.Callback):
@@ -66,8 +71,21 @@ class BatchGenerator(tf.keras.utils.Sequence):
 
 
 # ------------------------- #
-# [calculating def's]
-# prepare_data() - preparing data frames for network
+# [Defs]
+def visualise_training_network(history_train):
+    try:
+        plt.plot(history_train.history['mse'])
+        plt.plot(history_train.history['val_mse'])
+        plt.title('Model mean squared error')
+        plt.ylabel('MSE')
+        plt.xlabel('Epoch')
+        plt.legend(['Train', 'Test'], loc='upper left')
+        plt.show()
+    except:
+        print("Wrong model history")
+
+
+# Preparing Dataframes -> numpy array for train
 def prepare_dataset(filepath):
     tempX_data = np.zeros([0, INPUT_PARAMETERS])
     tempY_data = np.zeros([0, OUTPUT_PARAMETERS])
@@ -85,7 +103,7 @@ def prepare_dataset(filepath):
         tempY_data[:round(size * 0.7)], tempY_data[round(size * 0.7):]
 
 
-# prepare_model() - preparing architecture network (RNN)
+# Preparing model architecture (RNN)
 def get_model():
     try:
         tmp_model = keras.models.load_model("model/model.h5")
@@ -93,11 +111,32 @@ def get_model():
         print("No such h5 model file, creating new model")
         tmp_model = keras.Sequential(name="model")
         tmp_model.add(layers.InputLayer(batch_input_shape=(None, None, INPUT_PARAMETERS), name="input_1"))
-        tmp_model.add(layers.Dense(6, activation="tanh", name="dense_2"))
-        tmp_model.add(layers.LSTM(12, name="lstm_3"))
+        tmp_model.add(layers.Dense(10, activation="tanh", name="dense_2"))
+        tmp_model.add(layers.LSTM(24, name="lstm_3"))
         tmp_model.add(layers.Dense(2, name="dense_4"))
         tmp_model.compile(optimizer=keras.optimizers.Adam(0.001), loss=["mse"], metrics=["mse", "mae"])
     return tmp_model
+
+
+# Convert the model to tflite format and C (.c .h) array
+def get_lite_model():
+    try:
+        tmp_model = keras.models.load_model("model/model.h5")
+
+        converter = tf.lite.TFLiteConverter.from_keras_model(tmp_model)
+        converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS,
+                                               tf.lite.OpsSet.SELECT_TF_OPS]
+        converter._experimental_lower_tensor_list_ops = False
+        tflite_model = converter.convert()
+
+        source_text, header_text = convert_bytes_to_c_source(tflite_model, "lite", include_path="model/lite/")
+
+        with open("lite" + '.h', 'w') as file:
+            file.write(header_text)
+        with open("lite" + '.cc', 'w') as file:
+            file.write(source_text)
+    except IOError:
+        print("No such h5 model file")
 
 
 # --------------------------------------------------------------------------------------------- #
@@ -115,35 +154,21 @@ if __name__ == '__main__':
 
     # Prepare train and validation batch generators
     # --------------------------------#
-    trainGen = BatchGenerator(train_valX_paths, train_valY_paths)
-    valGen = BatchGenerator(validation_valX_paths, validation_valY_paths)
+    if IS_TRAIN:
+        trainGen = BatchGenerator(train_valX_paths, train_valY_paths)
+        valGen = BatchGenerator(validation_valX_paths, validation_valY_paths)
 
-    epoch_callback = CustomCallback()
-    model_checkpoint = keras.callbacks.ModelCheckpoint(filepath="model/model.h5", save_best_only=True,
-                                                       monitor="val_loss", mode="min")
-    early_stopping = keras.callbacks.EarlyStopping(monitor="val_loss", patience=3, mode="min")
+        epoch_callback = CustomCallback()
+        model_checkpoint = keras.callbacks.ModelCheckpoint(filepath="model/model.h5", save_best_only=True,
+                                                           monitor="val_loss", mode="min")
+        early_stopping = keras.callbacks.EarlyStopping(monitor="val_loss", patience=2, mode="min")
 
-    callbacks = [epoch_callback, model_checkpoint, early_stopping]
+        callbacks = [epoch_callback, model_checkpoint, early_stopping]
 
-    history = model.fit(trainGen, epochs=EPOCHS, validation_data=valGen, callbacks=callbacks)
+        history = model.fit(trainGen, epochs=EPOCHS, validation_data=valGen, callbacks=callbacks)
 
-    # Convert the model to tflite format.
-    converter = tf.lite.TFLiteConverter.from_keras_model(model)
-    converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS,
-                                           tf.lite.OpsSet.SELECT_TF_OPS]
-    converter._experimental_lower_tensor_list_ops = False
-    tflite_model = converter.convert()
+        if IS_CONVERT_LITE:
+            get_lite_model()
 
-    # Save the model.
-    with open('model/model.tflite', 'wb') as f:
-        f.write(tflite_model)
-
-    plt.plot(history.history['mse'])
-    plt.plot(history.history['val_mse'])
-    plt.title('Model mean squared error')
-    plt.ylabel('MSE')
-    plt.xlabel('Epoch')
-    plt.legend(['Train', 'Test'], loc='upper left')
-    plt.show()
-
-
+        if IS_VISUALISE:
+            visualise_training_network(history)
