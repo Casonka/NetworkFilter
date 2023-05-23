@@ -32,18 +32,21 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 BATCH_SIZE = 5
 INPUT_PARAMETERS = len(X_PARAMS)
 OUTPUT_PARAMETERS = len(Y_PARAMS)
-TIME_INTERVAL_MS = 250  # milliseconds
+TIME_INTERVAL_MS = 3500  # milliseconds
 TIME_TO_VARIABLE = int(TIME_INTERVAL_MS / 50)  # variables to shapes
 EPOCHS = 25
 # [Convert and visualise features]
-IS_CONVERT_LITE = True
+IS_CONVERT_LITE = False
 IS_VISUALISE = True
-IS_TRAIN = False
+IS_TRAIN = True
+IS_TEST = False
+IS_STATISTIC = True
 
 
 class CustomCallback(tf.keras.callbacks.Callback):
     def on_epoch_end(self, epoch, logs=None):
-        keys = list(logs.keys())
+        if IS_TEST:
+            print("\r\n" + "[Callback] - ")
 
 
 # Batch Generator Class
@@ -93,12 +96,14 @@ def prepare_dataset(filepath):
         if file.endswith(".csv"):
             temp = pd.read_csv(FILEPATH + file)
             y = temp[Y_PARAMS].shift(-1).drop(labels=[temp.count()[0] - 1]).values
-            x = temp[X_PARAMS].drop(labels=[temp.count()[0] - 1]).values
+            x = temp[X_PARAMS].drop(labels=[temp.count()[0] - 1]).values /
             tempY_data = np.append(tempY_data, y, 0)
             tempX_data = np.append(tempX_data, x, 0)
 
     size = tempX_data.shape[0]
-
+    if IS_STATISTIC:
+        print("[Dataset size] - " + str(size))
+        print("[Time map] - " + str(size * 50 / 1000) + " seconds")
     return tempX_data[:round(size * 0.7)], tempX_data[round(size * 0.7):], \
         tempY_data[:round(size * 0.7)], tempY_data[round(size * 0.7):]
 
@@ -111,9 +116,10 @@ def get_model():
         print("No such h5 model file, creating new model")
         tmp_model = keras.Sequential(name="model")
         tmp_model.add(layers.InputLayer(batch_input_shape=(None, None, INPUT_PARAMETERS), name="input_1"))
-        tmp_model.add(layers.Dense(10, activation="tanh", name="dense_2"))
-        tmp_model.add(layers.LSTM(24, name="lstm_3"))
-        tmp_model.add(layers.Dense(2, name="dense_4"))
+        tmp_model.add(layers.Dense(12, activation="tanh", name="dense_2"))
+        tmp_model.add(layers.GRU(24, name="lstm_3", return_sequences=True))
+        tmp_model.add(layers.GRU(8, name="lstm_4", return_sequences=False))
+        tmp_model.add(layers.Dense(2, name="dense_5"))
         tmp_model.compile(optimizer=keras.optimizers.Adam(0.001), loss=["mse"], metrics=["mse", "mae"])
     return tmp_model
 
@@ -158,12 +164,12 @@ if __name__ == '__main__':
         trainGen = BatchGenerator(train_valX_paths, train_valY_paths)
         valGen = BatchGenerator(validation_valX_paths, validation_valY_paths)
 
-        epoch_callback = CustomCallback()
+       # epoch_callback = CustomCallback()
         model_checkpoint = keras.callbacks.ModelCheckpoint(filepath="model/model.h5", save_best_only=True,
                                                            monitor="val_loss", mode="min")
         early_stopping = keras.callbacks.EarlyStopping(monitor="val_loss", patience=2, mode="min")
 
-        callbacks = [epoch_callback, model_checkpoint, early_stopping]
+        callbacks = [model_checkpoint, early_stopping]
 
         history = model.fit(trainGen, epochs=EPOCHS, validation_data=valGen, callbacks=callbacks)
 
