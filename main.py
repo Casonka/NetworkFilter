@@ -29,19 +29,20 @@ Y_PARAMS = ['true_deltaX', 'true_deltaY']
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 # ------------------------- #
 # [Network parameters]
-BATCH_SIZE = 25
+BATCH_SIZE = 35
 INPUT_PARAMETERS = len(X_PARAMS)
 OUTPUT_PARAMETERS = len(Y_PARAMS)
-TIME_INTERVAL_MS = 350  # milliseconds
+TIME_INTERVAL_MS = 1500  # milliseconds
 TIME_TO_VARIABLE = int(TIME_INTERVAL_MS / 50)  # variables to shapes
-EPOCHS = 25
+EPOCHS = 50
 # [Convert and visualise features]
 IS_CONVERT_LITE = False
 IS_VISUALISE = True
 IS_TRAIN = True
 IS_TEST = True
 IS_STATISTIC = True
-
+IS_AUGMENTATION = True
+IS_SHUFFLE = True
 Y_TEST = np.array([0.06226950, 0.00010529])
 X_TEST = np.array([[0.218344039, 0.0018604058, 0.000786]])
 
@@ -77,6 +78,11 @@ class BatchGenerator(tf.keras.utils.Sequence):
         return x, y
 
 
+def custom_loss_function(y_true, y_pred):
+    squared_difference = tf.square(y_true - y_pred)
+    return tf.reduce_mean(squared_difference, axis=-1)
+
+
 # ------------------------- #
 # [Defs]
 def visualise_training_network(history_train):
@@ -96,25 +102,24 @@ def visualise_training_network(history_train):
 def prepare_dataset(filepath):
     tempX_data = np.zeros([0, INPUT_PARAMETERS])
     tempY_data = np.zeros([0, OUTPUT_PARAMETERS])
-   # augmentation = False
     for i, file in enumerate(os.listdir(FILEPATH)):
         if file.endswith(".csv"):
             temp = pd.read_csv(FILEPATH + file)
-            y = temp[Y_PARAMS].shift(-1).drop(labels=[temp.count()[0] - 1]).values * -1
+            y = temp[Y_PARAMS].shift(-1).drop(labels=[temp.count()[0] - 1]).values
+            if not file.endswith("-12.0.csv"):
+                y = y * -1
             accel = temp[['accelX', 'accelY']].drop(labels=[temp.count()[0] - 1]).values / 19.614
             gyro = temp[['gyroZ']].drop(labels=[temp.count()[0] - 1]).values / 4.36332
             x = np.append(accel, gyro, 1)
             tempY_data = np.append(tempY_data, y, 0)
             tempX_data = np.append(tempX_data, x, 0)
-            # if augmentation:
-            #     tempY_data = np.append(tempY_data, -y, 0)
-            #     tempX_data = np.append(tempX_data, -x, 0)
-            #     augmentation = False
-            # else:
-            #     augmentation = True
+            if IS_AUGMENTATION:
+                tempY_data = np.append(tempY_data, -y, 0)
+                tempX_data = np.append(tempX_data, -x, 0)
 
     size = tempX_data.shape[0]
-    tempX_data, tempY_data = shuffle(tempX_data, tempY_data)
+    if IS_SHUFFLE:
+        tempX_data, tempY_data = shuffle(tempX_data, tempY_data)
     if IS_STATISTIC:
         print("[Dataset size] - " + str(size))
         print("[Time map] - " + str(size * 50 / 1000) + " seconds")
@@ -134,12 +139,14 @@ def get_model():
         tmp_model.add(layers.LSTM(14, name="lstm_2", return_sequences=True))
         tmp_model.add(layers.Dropout(0.5))
         tmp_model.add(layers.SimpleRNN(32, name="rnn_3", return_sequences=True))
-        tmp_model.add(layers.LSTM(8, name="lstm_3", return_sequences=True))
+        tmp_model.add(layers.Dropout(0.3))
+        tmp_model.add(layers.LSTM(12, name="lstm_3", return_sequences=True))
         tmp_model.add(layers.Dropout(0.5))
         tmp_model.add(layers.LSTM(6, name="lstm_4", return_sequences=False))
         tmp_model.add(layers.Dense(2, name="dense_5"))
-        tmp_model.compile(optimizer=keras.optimizers.Adam(0.0001), loss=["mse"],
-                          metrics=["mean_absolute_percentage_error", "mse", "mae"])
+        tmp_model.compile(optimizer=keras.optimizers.Adam(0.0001), loss=custom_loss_function)
+        if IS_STATISTIC:
+            tmp_model.summary()
     return tmp_model
 
 
@@ -175,7 +182,6 @@ if __name__ == '__main__':
     # Prepare and compile model
     # --------------------------------#
     model = get_model()
-    model.summary()
 
     # Prepare train and validation batch generators
     # --------------------------------#
@@ -184,11 +190,11 @@ if __name__ == '__main__':
         valGen = BatchGenerator(validation_valX_paths, validation_valY_paths)
 
         epoch_callback = CustomCallback()
-        model_checkpoint = keras.callbacks.ModelCheckpoint(filepath="model/model.h5", save_best_only=True,
-                                                           monitor="val_loss", mode="min")
-        early_stopping = keras.callbacks.EarlyStopping(monitor="val_loss", patience=2, mode="min")
+        # model_checkpoint = keras.callbacks.ModelCheckpoint(filepath="model/model.h5", save_best_only=True,
+        #                                                    monitor="val_loss", mode="min")
+        # early_stopping = keras.callbacks.EarlyStopping(monitor="val_loss", patience=2, mode="min")
 
-        callbacks = [epoch_callback, model_checkpoint, early_stopping]
+        callbacks = [epoch_callback]
 
         history = model.fit(trainGen, epochs=EPOCHS, validation_data=valGen, callbacks=callbacks)
 
