@@ -1,4 +1,5 @@
 # System includes
+import math
 import os
 from sklearn.utils import shuffle
 import navigation
@@ -41,7 +42,7 @@ IS_VISUALISE = True
 IS_TRAIN = True
 IS_TEST = True
 IS_STATISTIC = True
-IS_AUGMENTATION = True
+IS_AUGMENTATION = False
 IS_SHUFFLE = True
 Y_TEST = np.array([0.06226950, 0.00010529])
 X_TEST = np.array([[0.218344039, 0.0018604058, 0.000786]])
@@ -79,29 +80,30 @@ class BatchGenerator(tf.keras.utils.Sequence):
 
 
 def custom_loss_function(y_true, y_pred):
-    accelX = tf.reshape(y_pred[:, 0], (-1, 1))
-    accelY = tf.reshape(y_pred[:, 1], (-1, 1))
-    gyroZ = tf.reshape(y_pred[:, 2], (-1, 1))
+    delta_pred = tf.zeros([0, 2])
+    for j in range(TIME_TO_VARIABLE):
+        accelX = y_pred[j, 0]
+        accelY = y_pred[j, 1]
+        gyroZ = y_pred[j, 2]
 
-    angle = tf.reshape(y_true[:, 0], (-1, 1))
-    velocity = tf.reshape(y_true[:, 1], (-1, 1))
-    truePosx = tf.reshape(y_true[:, 2], (-1, 1))
-    truePosy = tf.reshape(y_true[:, 3], (-1, 1))
+        compass_angle = y_true[j, 0]
+        speed = y_true[j, 1]
 
-    d_angle = gyroZ * 0.05
-    real_angle = angle + d_angle
+        angle = compass_angle + (gyroZ * 0.05)
+        linear_acceleration = tf.sqrt(accelX ** 2 + accelY ** 2)
+        delta_velocityX = linear_acceleration * tf.sin(angle) * 0.05
+        delta_velocityY = linear_acceleration * tf.cos(angle) * 0.05
 
-    linear_acceleration = tf.sqrt(accelX ** 2 + accelY ** 2)
-    delta_velocityX = linear_acceleration * tf.sin(real_angle) * 0.05
-    delta_velocityY = linear_acceleration * tf.cos(real_angle) * 0.05
+        velocityX = speed + delta_velocityX
+        velocityY = speed + delta_velocityY
+        pred_coordX = velocityX * 0.05
+        pred_coordY = velocityY * 0.05
 
-    velocityX = velocity + delta_velocityX
-    velocityY = velocity + delta_velocityY
-
-    posX = truePosx + velocityX * 0.05
-    posY = truePosy + velocityY * 0.05
-
-    squared_difference = tf.square(y_true - y_pred)
+        array = np.array([pred_coordX, pred_coordY])
+        array = tf.convert_to_tensor(array, dtype=tf.float32)
+        delta_pred = tf.keras.backend.concatenate((delta_pred, array), 0)
+    delta_true = y_true[:, :, 2:]
+    squared_difference = tf.square(tf.abs(delta_true - delta_pred))
     return tf.reduce_mean(squared_difference, axis=-1)
 
 
@@ -158,14 +160,9 @@ def get_model():
         tmp_model = keras.Sequential(name="model")
         tmp_model.add(layers.InputLayer(batch_input_shape=(None, None, INPUT_PARAMETERS), name="input_1"))
         tmp_model.add(layers.Dense(12, activation="tanh", name="dense_2"))
-        tmp_model.add(layers.LSTM(14, name="lstm_2", return_sequences=True))
         tmp_model.add(layers.Dropout(0.5))
         tmp_model.add(layers.SimpleRNN(32, name="rnn_3", return_sequences=True))
-        tmp_model.add(layers.Dropout(0.3))
-        tmp_model.add(layers.LSTM(12, name="lstm_3", return_sequences=True))
-        tmp_model.add(layers.Dropout(0.5))
-        tmp_model.add(layers.LSTM(6, name="lstm_4", return_sequences=False))
-        tmp_model.add(layers.Dense(2, name="dense_5"))
+        tmp_model.add(layers.Dense(3, name="dense_5"))
         tmp_model.compile(optimizer=keras.optimizers.Adam(0.0001), loss=custom_loss_function)
         if IS_STATISTIC:
             tmp_model.summary()
@@ -205,7 +202,7 @@ if __name__ == '__main__':
     # --------------------------------#
     model = get_model()
 
-    custom_loss_function(validation_valY_paths, validation_valX_paths)
+
     # Prepare train and validation batch generators
     # --------------------------------#
     if IS_TRAIN:
