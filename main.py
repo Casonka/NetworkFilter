@@ -23,7 +23,7 @@ FILEPATH = "datasets/"
 # ------------------------- #
 # [Pandas variables]
 X_PARAMS = ['accelX', 'accelY', 'gyroZ']
-Y_PARAMS = ['true_deltaX', 'true_deltaY']
+Y_PARAMS = ['compassAngle', 'speed', 'true_deltaX', 'true_deltaY']
 # ------------------------- #
 # [NO WARNINGS]
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -79,6 +79,28 @@ class BatchGenerator(tf.keras.utils.Sequence):
 
 
 def custom_loss_function(y_true, y_pred):
+    accelX = tf.reshape(y_pred[:, 0], (-1, 1))
+    accelY = tf.reshape(y_pred[:, 1], (-1, 1))
+    gyroZ = tf.reshape(y_pred[:, 2], (-1, 1))
+
+    angle = tf.reshape(y_true[:, 0], (-1, 1))
+    velocity = tf.reshape(y_true[:, 1], (-1, 1))
+    truePosx = tf.reshape(y_true[:, 2], (-1, 1))
+    truePosy = tf.reshape(y_true[:, 3], (-1, 1))
+
+    d_angle = gyroZ * 0.05
+    real_angle = angle + d_angle
+
+    linear_acceleration = tf.sqrt(accelX ** 2 + accelY ** 2)
+    delta_velocityX = linear_acceleration * tf.sin(real_angle) * 0.05
+    delta_velocityY = linear_acceleration * tf.cos(real_angle) * 0.05
+
+    velocityX = velocity + delta_velocityX
+    velocityY = velocity + delta_velocityY
+
+    posX = truePosx + velocityX * 0.05
+    posY = truePosy + velocityY * 0.05
+
     squared_difference = tf.square(y_true - y_pred)
     return tf.reduce_mean(squared_difference, axis=-1)
 
@@ -183,6 +205,7 @@ if __name__ == '__main__':
     # --------------------------------#
     model = get_model()
 
+    custom_loss_function(validation_valY_paths, validation_valX_paths)
     # Prepare train and validation batch generators
     # --------------------------------#
     if IS_TRAIN:
