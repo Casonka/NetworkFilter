@@ -33,7 +33,7 @@ BATCH_SIZE = 15
 EPOCHS = 100
 INPUT_PARAMETERS = len(X_PARAMS)
 OUTPUT_PARAMETERS = len(Y_PARAMS)
-TIME_INTERVAL_MS = 200  # milliseconds
+TIME_INTERVAL_MS = 500  # milliseconds
 TIME_TO_VARIABLE = int(TIME_INTERVAL_MS / 50)  # variables to shapes
 dt = 0.05
 # [Convert and visualise features]
@@ -83,38 +83,28 @@ class BatchGenerator(tf.keras.utils.Sequence):
 
 
 def custom_loss_function(y_true, y_pred):
-    delta_pred = tf.zeros([0, TIME_TO_VARIABLE, 2])
-    for i in range(BATCH_SIZE):
-        delta_pred2d = tf.zeros([0, 2])
-        for j in range(TIME_TO_VARIABLE):
-            accelX = tf.reshape(y_pred[i, j, 0], (-1, 1))
-            accelY = tf.reshape(y_pred[i, j, 1], (-1, 1))
-            gyroZ = tf.reshape(y_pred[i, j, 2], (-1, 1))
-
-            compass_angle = tf.abs(tf.reshape(y_true[j, 0], (-1, 1)))
-            speed = tf.reshape(y_true[j, 1], (-1, 1))
-
-            # calc new angle
-            angle = compass_angle + (gyroZ * dt)
-            # calc acceleration vector
-            linear_acceleration = tf.sqrt(accelX ** 2 + accelY ** 2)
-            # calc delta velocity X,Y
-            delta_velocityX = linear_acceleration * tf.sin(angle) * dt
-            delta_velocityY = linear_acceleration * tf.cos(angle) * dt
-
-            velocityX = speed + delta_velocityX
-            velocityY = speed + delta_velocityY
-            # calc delta X,Y
-            pred_coordX = velocityX * dt
-            pred_coordY = velocityY * dt
-
-            array = tf.keras.backend.concatenate((pred_coordX, pred_coordY), 1)
-            delta_pred2d = tf.keras.backend.concatenate((delta_pred2d, array), 0)
-        tmp_delta = tf.expand_dims(delta_pred2d, axis=0)
-        delta_pred = tf.keras.backend.concatenate((delta_pred, tmp_delta), 0)
+    delta_pred2d = tf.zeros([0, 2])
+    accelX = tf.reshape(y_pred[:, 0], (-1, 1)) * 19.614
+    accelY = tf.reshape(y_pred[:, 1], (-1, 1)) * 19.614
+    gyroZ = tf.reshape(y_pred[:, 2], (-1, 1)) * 4.36332
+    compass_angle = tf.abs(tf.reshape(y_true[:, 0], (-1, 1)))
+    speed = tf.reshape(y_true[:, 1], (-1, 1))
+    # calc new angle
+    angle = compass_angle + (gyroZ * dt)
+    # calc acceleration vector
+    linear_acceleration = tf.sqrt(accelX ** 2 + accelY ** 2)
+    # calc delta velocity X,Y
+    delta_velocityX = linear_acceleration * tf.sin(angle) * dt
+    delta_velocityY = linear_acceleration * tf.cos(angle) * dt
+    velocityX = speed + delta_velocityX
+    velocityY = speed + delta_velocityY
+    # calc delta X,Y
+    pred_coordX = velocityX * dt
+    pred_coordY = velocityY * dt
+    array = tf.keras.backend.concatenate((pred_coordX, pred_coordY), 1)
+    delta_pred2d = tf.keras.backend.concatenate((delta_pred2d, array), 0)
     delta_true = y_true[:, 2:]
-    result = tf.reduce_mean(delta_pred, axis=1)
-    result = tf.reduce_mean(tf.abs(delta_true - result), 0)
+    result = tf.reduce_mean(tf.abs(delta_true - delta_pred2d), 0)
     return result
 
 
@@ -172,9 +162,10 @@ def get_model():
         tmp_model = keras.Sequential(name="model")
         tmp_model.add(layers.InputLayer(batch_input_shape=(None, None, INPUT_PARAMETERS), name="input_1"))
         tmp_model.add(layers.Dense(6, activation="tanh", name="dense_2"))
-        tmp_model.add(layers.BatchNormalization())
-        tmp_model.add(layers.SimpleRNN(24, name="rnn_3", return_sequences=True))
-        tmp_model.add(layers.Dense(3, name="dense_5"))
+        tmp_model.add(layers.LSTM(12, name="rnn_3", return_sequences=True))
+        tmp_model.add(layers.Dropout(0.5))
+        tmp_model.add(layers.LSTM(6, name="rnn_4", return_sequences=False))
+        tmp_model.add(layers.Dense(3, name="dense_5", activation="tanh"))
         tmp_model.compile(optimizer=keras.optimizers.Adam(0.0001), loss=custom_loss_function)
         if IS_STATISTIC:
             tmp_model.summary()
