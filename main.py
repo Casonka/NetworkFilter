@@ -1,5 +1,4 @@
 # System includes
-import math
 import os
 from sklearn.utils import shuffle
 import navigation
@@ -30,20 +29,22 @@ Y_PARAMS = ['compassAngle', 'speed', 'true_deltaX', 'true_deltaY']
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 # ------------------------- #
 # [Network parameters]
-BATCH_SIZE = 35
+BATCH_SIZE = 15
+EPOCHS = 100
 INPUT_PARAMETERS = len(X_PARAMS)
 OUTPUT_PARAMETERS = len(Y_PARAMS)
-TIME_INTERVAL_MS = 1500  # milliseconds
+TIME_INTERVAL_MS = 200  # milliseconds
 TIME_TO_VARIABLE = int(TIME_INTERVAL_MS / 50)  # variables to shapes
-EPOCHS = 50
+dt = 0.05
 # [Convert and visualise features]
 IS_CONVERT_LITE = False
 IS_VISUALISE = True
 IS_TRAIN = True
 IS_TEST = True
-IS_STATISTIC = True
+IS_STATISTIC = False
 IS_AUGMENTATION = False
-IS_SHUFFLE = True
+IS_SHUFFLE = False
+# [Test values]
 Y_TEST = np.array([0.06226950, 0.00010529])
 X_TEST = np.array([[0.218344039, 0.0018604058, 0.000786]])
 
@@ -51,8 +52,10 @@ X_TEST = np.array([[0.218344039, 0.0018604058, 0.000786]])
 class CustomCallback(tf.keras.callbacks.Callback):
     def on_epoch_end(self, epoch, logs=None):
         if IS_TEST:
-            result = self.model.predict(np.expand_dims(X_TEST, axis=0))
-            print("\r\n" + "[Callback] - Predict " + str(result) + " True value " + str(Y_TEST))
+            print("\r\n" + "[Callback] - Predict " + str(self.model.predict(np.expand_dims(X_TEST, axis=0))))
+
+    # def on_predict_end(self, logs=None):
+    #     if IS_TEST:
 
 
 # Batch Generator Class
@@ -80,41 +83,49 @@ class BatchGenerator(tf.keras.utils.Sequence):
 
 
 def custom_loss_function(y_true, y_pred):
-    delta_pred = tf.zeros([0, 2])
-    for j in range(TIME_TO_VARIABLE):
-        accelX = y_pred[j, 0]
-        accelY = y_pred[j, 1]
-        gyroZ = y_pred[j, 2]
+    delta_pred = tf.zeros([0, TIME_TO_VARIABLE, 2])
+    for i in range(BATCH_SIZE):
+        delta_pred2d = tf.zeros([0, 2])
+        for j in range(TIME_TO_VARIABLE):
+            accelX = tf.reshape(y_pred[i, j, 0], (-1, 1))
+            accelY = tf.reshape(y_pred[i, j, 1], (-1, 1))
+            gyroZ = tf.reshape(y_pred[i, j, 2], (-1, 1))
 
-        compass_angle = y_true[j, 0]
-        speed = y_true[j, 1]
+            compass_angle = tf.abs(tf.reshape(y_true[j, 0], (-1, 1)))
+            speed = tf.reshape(y_true[j, 1], (-1, 1))
 
-        angle = compass_angle + (gyroZ * 0.05)
-        linear_acceleration = tf.sqrt(accelX ** 2 + accelY ** 2)
-        delta_velocityX = linear_acceleration * tf.sin(angle) * 0.05
-        delta_velocityY = linear_acceleration * tf.cos(angle) * 0.05
+            # calc new angle
+            angle = compass_angle + (gyroZ * dt)
+            # calc acceleration vector
+            linear_acceleration = tf.sqrt(accelX ** 2 + accelY ** 2)
+            # calc delta velocity X,Y
+            delta_velocityX = linear_acceleration * tf.sin(angle) * dt
+            delta_velocityY = linear_acceleration * tf.cos(angle) * dt
 
-        velocityX = speed + delta_velocityX
-        velocityY = speed + delta_velocityY
-        pred_coordX = velocityX * 0.05
-        pred_coordY = velocityY * 0.05
+            velocityX = speed + delta_velocityX
+            velocityY = speed + delta_velocityY
+            # calc delta X,Y
+            pred_coordX = velocityX * dt
+            pred_coordY = velocityY * dt
 
-        array = np.array([pred_coordX, pred_coordY])
-        array = tf.convert_to_tensor(array, dtype=tf.float32)
-        delta_pred = tf.keras.backend.concatenate((delta_pred, array), 0)
-    delta_true = y_true[:, :, 2:]
-    squared_difference = tf.square(tf.abs(delta_true - delta_pred))
-    return tf.reduce_mean(squared_difference, axis=-1)
+            array = tf.keras.backend.concatenate((pred_coordX, pred_coordY), 1)
+            delta_pred2d = tf.keras.backend.concatenate((delta_pred2d, array), 0)
+        tmp_delta = tf.expand_dims(delta_pred2d, axis=0)
+        delta_pred = tf.keras.backend.concatenate((delta_pred, tmp_delta), 0)
+    delta_true = y_true[:, 2:]
+    result = tf.reduce_mean(delta_pred, axis=1)
+    result = tf.reduce_mean(tf.abs(delta_true - result), 0)
+    return result
 
 
 # ------------------------- #
 # [Defs]
 def visualise_training_network(history_train):
     try:
-        plt.plot(history_train.history['mse'])
-        plt.plot(history_train.history['val_mse'])
-        plt.title('Model mean squared error')
-        plt.ylabel('MSE')
+        plt.plot(history_train.history['loss'])
+        plt.plot(history_train.history['val_loss'])
+        plt.title('Amplitude abs error')
+        plt.ylabel('AE')
         plt.xlabel('Epoch')
         plt.legend(['Train', 'Test'], loc='upper left')
         plt.show()
@@ -154,14 +165,15 @@ def prepare_dataset(filepath):
 # Preparing model architecture (RNN)
 def get_model():
     try:
-        tmp_model = keras.models.load_model("model/model.h5")
+        tmp_model = keras.models.load_model("model/model.h5", compile=False)
+        tmp_model.compile(optimizer=keras.optimizers.Adam(0.0001), loss=custom_loss_function)
     except IOError:
         print("No such h5 model file, creating new model")
         tmp_model = keras.Sequential(name="model")
         tmp_model.add(layers.InputLayer(batch_input_shape=(None, None, INPUT_PARAMETERS), name="input_1"))
-        tmp_model.add(layers.Dense(12, activation="tanh", name="dense_2"))
-        tmp_model.add(layers.Dropout(0.5))
-        tmp_model.add(layers.SimpleRNN(32, name="rnn_3", return_sequences=True))
+        tmp_model.add(layers.Dense(6, activation="tanh", name="dense_2"))
+        tmp_model.add(layers.BatchNormalization())
+        tmp_model.add(layers.SimpleRNN(24, name="rnn_3", return_sequences=True))
         tmp_model.add(layers.Dense(3, name="dense_5"))
         tmp_model.compile(optimizer=keras.optimizers.Adam(0.0001), loss=custom_loss_function)
         if IS_STATISTIC:
@@ -198,10 +210,11 @@ if __name__ == '__main__':
     train_valX_paths, validation_valX_paths, train_valY_paths, \
         validation_valY_paths = prepare_dataset(FILEPATH)
 
+    # clear old gpu/cpu allocated memory
+    tf.keras.backend.clear_session()
     # Prepare and compile model
     # --------------------------------#
     model = get_model()
-
 
     # Prepare train and validation batch generators
     # --------------------------------#
@@ -210,16 +223,20 @@ if __name__ == '__main__':
         valGen = BatchGenerator(validation_valX_paths, validation_valY_paths)
 
         epoch_callback = CustomCallback()
-        # model_checkpoint = keras.callbacks.ModelCheckpoint(filepath="model/model.h5", save_best_only=True,
-        #                                                    monitor="val_loss", mode="min")
-        # early_stopping = keras.callbacks.EarlyStopping(monitor="val_loss", patience=2, mode="min")
+        # save model in training
+        model_checkpoint = keras.callbacks.ModelCheckpoint(filepath="model/model.h5", save_best_only=True,
+                                                           monitor="val_loss", mode="min")
+        # stop training
+        early_stopping = keras.callbacks.EarlyStopping(monitor="val_loss", patience=1, mode="min")
 
-        callbacks = [epoch_callback]
+        callbacks = [epoch_callback, model_checkpoint, early_stopping]
 
         history = model.fit(trainGen, epochs=EPOCHS, validation_data=valGen, callbacks=callbacks)
 
+        # creating tflite model and C files
         if IS_CONVERT_LITE:
             get_lite_model()
 
+        # visualise training
         if IS_VISUALISE:
             visualise_training_network(history)
