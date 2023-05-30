@@ -22,18 +22,18 @@ import pandas as pd
 FILEPATH = "datasets/"
 # ------------------------- #
 # [Pandas variables]
-X_PARAMS = ['accelX', 'accelY', 'gyroZ']
-Y_PARAMS = ['compassAngle', 'speed', 'true_deltaX', 'true_deltaY']
+X_PARAMS = ['accelX', 'accelY', 'gyroZ', 'compassAngle', 'speed']
+Y_PARAMS = ['true_deltaX', 'true_deltaY']
 # ------------------------- #
 # [NO WARNINGS]
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 # ------------------------- #
 # [Network parameters]
-BATCH_SIZE = 15
-EPOCHS = 100
+BATCH_SIZE = 16
+EPOCHS = 700
 INPUT_PARAMETERS = len(X_PARAMS)
 OUTPUT_PARAMETERS = len(Y_PARAMS)
-TIME_INTERVAL_MS = 500  # milliseconds
+TIME_INTERVAL_MS = 250  # milliseconds
 TIME_TO_VARIABLE = int(TIME_INTERVAL_MS / 50)  # variables to shapes
 dt = 0.05
 # [Convert and visualise features]
@@ -45,36 +45,30 @@ IS_STATISTIC = False
 IS_AUGMENTATION = False
 IS_SHUFFLE = False
 # [Test values]
-X_TEST = np.array([[4.04923, 0.15925, 0.02789],
-                   [4.03545, 0.20221, 0.03076],
-                   [4.06409, 0.23189, 0.03403],
-                   [4.06218, 0.20123, 0.03524],
-                   [4.06456, 0.20598, 0.03624],
-                   [4.08857, 0.21760, 0.03756],
-                   [4.05445, 0.26894, 0.04017],
-                   [4.07548, 0.21590, 0.04001]])
+X_TEST = np.array([[0.206445906, 0.008119201, 0.006391922, -0.503904099, 0.231646833],
+                   [0.205743347, 0.010309473, 0.007049678, -0.504368835, 0.2435245],
+                   [0.207203528, 0.011822678, 0.007799107, -0.504368835, 0.267286833],
+                   [0.207106149, 0.010259509, 0.008076419, -0.505451096, 0.2791855],
+                   [0.207227491, 0.010501682, 0.008305602, -0.506017692, 0.303000667],
+                   [0.208451616, 0.011094116, 0.008608124, -0.507224095, 0.314905],
+                   [0.206712042, 0.013711635, 0.009206292, -0.507879818, 0.3268125],
+                   [0.207784236, 0.011007444, 0.009169623, -0.50850371, 0.338723333]])
 # 1.05 - 1.40 = 350 milliseconds
 Y_TEST = np.array([[-1.58305, 13.89881, -0.20092502, -0.00261093],
-                   [-1.58615, 15.32418, -0.21082472, -0.00305459],
                    [-1.58451, 14.61147, -0.21082472, -0.00305459],
-                   [4.06218, 0.20123, 0.03524],
-                   [4.06456, 0.20598, 0.03624],
-                   [4.08857, 0.21760, 0.03756],
-                   [4.05445, 0.26894, 0.04017],
-                   [4.07548, 0.21590, 0.04001]])
+                   [-1.58791, 16.03721, -0.23062710, -0.00410544],
+                   [-1.58969, 16.75113, -0.24053875, -0.00472469],
+                   [-1.59348, 18.18004, -0.26035066, -0.00608674],
+                   [-1.59554, 18.89430, -0.27025340, -0.00682930],
+                   [-1.59750, 19.60875, -0.28016359, -0.00766041],
+                   [-1.59951, 20.32340, -0.29006710, -0.00845993]])
 
-
-1.15000,,9.72705,0.00150,-0.00038,,,2.80691,-4.71288,-2.56568,-0.02110,-0.02,-0.22072240,-0.00355293
-1.20000,,9.80084,0.00066,-0.00042,-1.58791,16.03721,1.41535,-1.03261,-2.79630,-0.02521,-0.03,-0.23062710,-0.00410544
-1.25000,,9.84038,0.00047,-0.00032,-1.58969,16.75113,-0.22428,-0.13040,-3.03684,-0.02993,-0.02,-0.24053875,-0.00472469
-1.30000,,9.74503,0.00056,-0.00014,-1.59155,17.46560,-3.06207,-1.16917,-3.28729,-0.03530,-0.03,-0.25044652,-0.00536735
-1.35000,,9.77922,0.00146,0.00005,-1.59348,18.18004,-3.12659,-2.74779,-3.54764,-0.04139,-0.02,-0.26035066,-0.00608674
-1.40000,,9.80600,0.00045,0.00013,-1.59554,18.89430,-3.60735,-3.16249,-3.81789,-0.04822,-0.02,-0.27025340,-0.00682930
 
 class CustomCallback(tf.keras.callbacks.Callback):
     def on_epoch_end(self, epoch, logs=None):
         if IS_TEST:
             print("\r\n" + "[Callback] - Predict " + str(self.model.predict(np.expand_dims(X_TEST, axis=0))))
+            print("\r\n" + "[Callback] - Old     " + str(Y_TEST[7, 2:]))
 
     # def on_predict_end(self, logs=None):
     #     if IS_TEST:
@@ -109,7 +103,7 @@ def custom_loss_function(y_true, y_pred):
     accelX = tf.reshape(y_pred[:, 0], (-1, 1)) * 19.614
     accelY = tf.reshape(y_pred[:, 1], (-1, 1)) * 19.614
     gyroZ = tf.reshape(y_pred[:, 2], (-1, 1)) * 4.36332
-    compass_angle = tf.abs(tf.reshape(y_true[:, 0], (-1, 1)))
+    compass_angle = tf.reshape(y_true[:, 0], (-1, 1))
     speed = tf.reshape(y_true[:, 1], (-1, 1))
     # calc new angle
     angle = compass_angle + (gyroZ * dt)
@@ -153,11 +147,13 @@ def prepare_dataset(filepath):
         if file.endswith(".csv"):
             temp = pd.read_csv(FILEPATH + file)
             y = temp[Y_PARAMS].shift(-1).drop(labels=[temp.count()[0] - 1]).values
-            if not file.endswith("-12.0.csv"):
-                y = y * -1
             accel = temp[['accelX', 'accelY']].drop(labels=[temp.count()[0] - 1]).values / 19.614
             gyro = temp[['gyroZ']].drop(labels=[temp.count()[0] - 1]).values / 4.36332
+            compass = temp[['compassAngle']].drop(labels=[temp.count()[0] - 1]).values / 3.14157
+            speed = temp[['speed']].drop(labels=[temp.count()[0] - 1]).values / 60.00
             x = np.append(accel, gyro, 1)
+            x = np.append(x, compass, 1)
+            x = np.append(x, speed, 1)
             tempY_data = np.append(tempY_data, y, 0)
             tempX_data = np.append(tempX_data, x, 0)
             if IS_AUGMENTATION:
@@ -178,17 +174,16 @@ def prepare_dataset(filepath):
 def get_model():
     try:
         tmp_model = keras.models.load_model("model/model.h5", compile=False)
-        tmp_model.compile(optimizer=keras.optimizers.Adam(0.0001), loss=custom_loss_function)
+        tmp_model.compile(optimizer=keras.optimizers.Adam(0.0001), loss="mse", metrics="mae")
     except IOError:
         print("No such h5 model file, creating new model")
         tmp_model = keras.Sequential(name="model")
         tmp_model.add(layers.InputLayer(batch_input_shape=(None, None, INPUT_PARAMETERS), name="input_1"))
-        tmp_model.add(layers.Dense(6, activation="tanh", name="dense_2"))
-        tmp_model.add(layers.LSTM(12, name="rnn_3", return_sequences=True))
-        tmp_model.add(layers.Dropout(0.5))
-        tmp_model.add(layers.LSTM(6, name="rnn_4", return_sequences=False))
-        tmp_model.add(layers.Dense(3, name="dense_5", activation="tanh"))
-        tmp_model.compile(optimizer=keras.optimizers.Adam(0.0001), loss=custom_loss_function)
+        tmp_model.add(layers.SimpleRNN(9, name="rnn_2", return_sequences=True))
+        tmp_model.add(layers.Dropout(0.3))
+        tmp_model.add(layers.SimpleRNN(6, name="rnn_3",))
+        tmp_model.add(layers.Dense(2, name="dense_4",))
+        tmp_model.compile(optimizer=keras.optimizers.Adam(0.0001), loss="mse", metrics="mae")
         if IS_STATISTIC:
             tmp_model.summary()
     return tmp_model
@@ -240,11 +235,11 @@ if __name__ == '__main__':
         model_checkpoint = keras.callbacks.ModelCheckpoint(filepath="model/model.h5", save_best_only=True,
                                                            monitor="val_loss", mode="min")
         # stop training
-        early_stopping = keras.callbacks.EarlyStopping(monitor="val_loss", patience=1, mode="min")
+        early_stopping = keras.callbacks.EarlyStopping(monitor="val_loss", patience=50, mode="min")
 
-        callbacks = [epoch_callback, model_checkpoint, early_stopping]
+        callbacks = [epoch_callback, early_stopping, model_checkpoint]
 
-        history = model.fit(trainGen, epochs=EPOCHS, validation_data=valGen, callbacks=callbacks)
+        history = model.fit(trainGen, epochs=EPOCHS, validation_data=valGen, callbacks=callbacks, shuffle=IS_SHUFFLE)
 
         # creating tflite model and C files
         if IS_CONVERT_LITE:
