@@ -33,7 +33,7 @@ BATCH_SIZE = 16
 EPOCHS = 700
 INPUT_PARAMETERS = len(X_PARAMS)
 OUTPUT_PARAMETERS = len(Y_PARAMS)
-TIME_INTERVAL_MS = 250  # milliseconds
+TIME_INTERVAL_MS = 600  # milliseconds
 TIME_TO_VARIABLE = int(TIME_INTERVAL_MS / 50)  # variables to shapes
 dt = 0.05
 # [Convert and visualise features]
@@ -131,7 +131,7 @@ def visualise_training_network(history_train):
         plt.plot(history_train.history['loss'])
         plt.plot(history_train.history['val_loss'])
         plt.title('Amplitude abs error')
-        plt.ylabel('AE')
+        plt.ylabel('MSE')
         plt.xlabel('Epoch')
         plt.legend(['Train', 'Test'], loc='upper left')
         plt.show()
@@ -222,8 +222,8 @@ if __name__ == '__main__':
     tf.keras.backend.clear_session()
     # Prepare and compile model
     # --------------------------------#
-    model = get_model()
 
+    model = get_model()
     # Prepare train and validation batch generators
     # --------------------------------#
     if IS_TRAIN:
@@ -235,9 +235,11 @@ if __name__ == '__main__':
         model_checkpoint = keras.callbacks.ModelCheckpoint(filepath="model/model.h5", save_best_only=True,
                                                            monitor="val_loss", mode="min")
         # stop training
-        early_stopping = keras.callbacks.EarlyStopping(monitor="val_loss", patience=50, mode="min")
+        early_stopping = keras.callbacks.EarlyStopping(monitor="val_loss", patience=25, mode="min")
 
-        callbacks = [epoch_callback, early_stopping, model_checkpoint]
+        csv_logger = keras.callbacks.CSVLogger(filename='train_log.log', append=False, separator=',')
+
+        callbacks = [epoch_callback, early_stopping, model_checkpoint, csv_logger]
 
         history = model.fit(trainGen, epochs=EPOCHS, validation_data=valGen, callbacks=callbacks, shuffle=IS_SHUFFLE)
 
