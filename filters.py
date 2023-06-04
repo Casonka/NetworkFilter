@@ -15,23 +15,39 @@ import numpy as np
 import pandas as pd
 
 import navigation
-
-# ------------------------- #
-# Dataset Files
-FILEPATH = "datasets/data_12.0.csv"
-# FILEPATH = "datasets/data_30.0.csv"
-# FILEPATH = "datasets/data_40.0.csv"
-# FILEPATH = "datasets/data_50.0.csv"
-# ------------------------- #
-# Item group variable
-ITEMS = 10000
-DEF_K = 0.49
-MEDIAN_WINDOW_SIZE = 3
-MOVING_AVERAGE_SIZE = 15
-
-
-# ------------------------- #
 # Filter defs
+
+
+def alpha_beta_filter_calc(data):
+    k_kalman = 0
+    T_0 = 0.05
+    filtered_velocity = 0.0
+    filtered_value = np.zeros((len(data)))
+    extrapolated_value = 0.
+    extrapolated_velocity = 0.
+    for i in range(len(data)):
+        k_kalman += 1
+        if k_kalman == 1:
+            filtered_value[i] = data[i]
+            continue
+        if k_kalman == 2:
+            filtered_velocity = data[i] - filtered_value[i - 1] / T_0
+            filtered_value[i] = data[i]
+
+            extrapolated_value = filtered_value[i] + (filtered_velocity * T_0)
+            extrapolated_velocity = filtered_velocity
+            continue
+
+        alpha = (2.0 * (2.0 * k_kalman - 1.0)) / (k_kalman * (k_kalman + 1.0))
+        beta = 6.0 / (k_kalman * (k_kalman + 1))
+
+        filtered_value[i] = extrapolated_value + (alpha * (data[i] - extrapolated_value))
+        filtered_velocity = extrapolated_velocity + (beta / T_0 * (data[i] - extrapolated_value))
+
+        filtered_value[i] = filtered_value[i] + (filtered_velocity * T_0)
+        extrapolated_velocity = filtered_velocity
+    return filtered_value
+
 
 def moving_average_filter_calc(data, window):
     result = np.zeros((len(data), 1))
@@ -64,174 +80,10 @@ def median_filter_calc(data, window):
             tmp = data[i:(i + (len(data) - i))]
         else:
             tmp = data[i:(i + window)]
-        tmp = tmp.sort_values(ascending=True)
+        tmp = np.sort(tmp)
         if len(tmp) < 2:
             filtered[i] = tmp
         else:
-            filtered[i] = tmp.iloc[len(tmp) // 2]
+            filtered[i] = tmp[tmp.shape[0] // 2]
     return filtered
 
-
-def moving_average_demo(datafile):
-    accel_fX = moving_average_filter_calc(datafile['accelX'], MOVING_AVERAGE_SIZE)
-    accel_fY = moving_average_filter_calc(datafile['accelY'], MOVING_AVERAGE_SIZE)
-    gyro_fZ = moving_average_filter_calc(datafile['gyroZ'], MOVING_AVERAGE_SIZE)
-    time = datafile.iloc[:, 0]
-
-    real_coordX = datafile.iloc[:, 11]
-    real_coordY = datafile.iloc[:, 12]
-    coords = np.zeros([len(datafile), 4])
-    velocityX, velocityY = 0, 0
-    for i in range(len(coords)):
-        real_angle = datafile.iloc[i, 7]
-
-        prev_coordX = datafile.iloc[i, 11]
-        prev_coordY = datafile.iloc[i, 12]
-        dx, dy = navigation.calc_delta_from_accel_gyro(0.05, accel_fX[i], accel_fY[i], gyro_fZ[i], real_angle,
-                                                       coords[i, 0], coords[i, 1], velocityX, velocityY)
-
-        newX = prev_coordX + dx
-        newY = prev_coordY + dy
-
-        errorX = newX - datafile.iloc[i, 11]
-        errorY = newY - datafile.iloc[i, 12]
-
-        coords[i, 0] = newX
-        coords[i, 1] = newY
-
-        coords[i, 2] = errorX
-        coords[i, 3] = errorY
-
-    print(np.sqrt(np.square(np.subtract(real_coordX, coords[:, 0])).mean()))
-    print(np.sqrt(np.square(np.subtract(real_coordY, coords[:, 1])).mean()))
-
-    plt.subplot(2, 1, 1)
-    plt.plot(time, real_coordX, color="green", linewidth=3)
-    plt.plot(time, coords[:, 0], color="orange", linewidth=2)
-    plt.title("K - " + str(DEF_K))
-    plt.xlabel("Время, сек")
-    plt.ylabel("Положение по Х")
-    plt.grid()
-
-    plt.subplot(2, 1, 2)
-    plt.plot(time, real_coordY, color="green", linewidth=3)
-    plt.plot(time, coords[:, 1], color="orange", linewidth=2)
-    plt.title("K - " + str(DEF_K))
-    plt.xlabel("Время, сек")
-    plt.ylabel("Положение по Y")
-    plt.grid()
-    plt.show()
-
-
-def low_pass_filter_demo(datafile):
-    accel_fX = low_pass_filter_calc(datafile['accelX'], DEF_K)
-    accel_fY = low_pass_filter_calc(datafile['accelY'], DEF_K)
-    gyro_fZ = low_pass_filter_calc(datafile['gyroZ'], DEF_K)
-    time = datafile.iloc[:, 0]
-
-    real_coordX = datafile.iloc[:, 11]
-    real_coordY = datafile.iloc[:, 12]
-    coords = np.zeros([len(datafile), 4])
-    velocityX, velocityY = 0, 0
-    for i in range(len(coords)):
-        real_angle = datafile.iloc[i, 7]
-
-        prev_coordX = datafile.iloc[i, 11]
-        prev_coordY = datafile.iloc[i, 12]
-        dx, dy = navigation.calc_delta_from_accel_gyro(0.05, accel_fX[i], accel_fY[i], gyro_fZ[i], real_angle,
-                                                               coords[i, 0], coords[i, 1], velocityX, velocityY)
-
-        newX = prev_coordX + dx
-        newY = prev_coordY + dy
-
-        errorX = newX - datafile.iloc[i, 11]
-        errorY = newY - datafile.iloc[i, 12]
-
-        coords[i, 0] = newX
-        coords[i, 1] = newY
-
-        coords[i, 2] = errorX
-        coords[i, 3] = errorY
-
-    print(np.sqrt(np.square(np.subtract(real_coordX, coords[:, 0])).mean()))
-    print(np.sqrt(np.square(np.subtract(real_coordY, coords[:, 1])).mean()))
-
-    plt.subplot(2, 1, 1)
-    plt.plot(time, real_coordX, color="green", linewidth=3)
-    plt.plot(time, coords[:, 0], color="orange", linewidth=2)
-    plt.title("K - " + str(DEF_K))
-    plt.xlabel("Время, сек")
-    plt.ylabel("Положение по Х")
-    plt.grid()
-
-    plt.subplot(2, 1, 2)
-    plt.plot(time, real_coordY, color="green", linewidth=3)
-    plt.plot(time, coords[:, 1], color="orange", linewidth=2)
-    plt.title("K - " + str(DEF_K))
-    plt.xlabel("Время, сек")
-    plt.ylabel("Положение по Y")
-    plt.grid()
-    plt.show()
-
-
-def median_filter_demo(datafile):
-    accel_fX = median_filter_calc(datafile['accelX'], MEDIAN_WINDOW_SIZE)
-    accel_fY = median_filter_calc(datafile['accelY'], MEDIAN_WINDOW_SIZE)
-    gyro_fZ = median_filter_calc(datafile['gyroZ'], MEDIAN_WINDOW_SIZE)
-    time = datafile.iloc[:, 0]
-
-    real_coordX = datafile.iloc[:, 11]
-    real_coordY = datafile.iloc[:, 12]
-    coords = np.zeros([len(datafile), 4])
-    velocityX, velocityY = 0, 0
-    for i in range(len(coords)):
-        real_angle = datafile.iloc[i, 7]
-
-        prev_coordX = datafile.iloc[i, 11]
-        prev_coordY = datafile.iloc[i, 12]
-        dx, dy = navigation.calc_delta_from_accel_gyro(0.05, accel_fX[i], accel_fY[i], gyro_fZ[i], real_angle,
-                                                       coords[i, 0], coords[i, 1], velocityX, velocityY)
-
-        newX = prev_coordX + dx
-        newY = prev_coordY + dy
-
-        errorX = newX - datafile.iloc[i, 11]
-        errorY = newY - datafile.iloc[i, 12]
-
-        coords[i, 0] = newX
-        coords[i, 1] = newY
-
-        coords[i, 2] = errorX
-        coords[i, 3] = errorY
-
-    print(np.sqrt(np.square(np.subtract(real_coordX, coords[:, 0])).mean()))
-    print(np.sqrt(np.square(np.subtract(real_coordY, coords[:, 1])).mean()))
-
-    plt.subplot(2, 1, 1)
-    plt.plot(time, real_coordX, color="green", linewidth=3)
-    plt.plot(time, coords[:, 0], color="orange", linewidth=2)
-    plt.title("K - " + str(DEF_K))
-    plt.xlabel("Время, сек")
-    plt.ylabel("Положение по Х")
-    plt.grid()
-
-    plt.subplot(2, 1, 2)
-    plt.plot(time, real_coordY, color="green", linewidth=3)
-    plt.plot(time, coords[:, 1], color="orange", linewidth=2)
-    plt.title("K - " + str(DEF_K))
-    plt.xlabel("Время, сек")
-    plt.ylabel("Положение по Y")
-    plt.grid()
-    plt.show()
-
-
-if __name__ == '__main__':
-    file = pd.read_csv(FILEPATH)
-    # timestamp = file['time'].head(ITEMS)
-    # accelerometer = file[['accelX', 'accelY', 'accelZ']].head(ITEMS)
-    # gyroscope = file[['gyroX', 'gyroY', 'gyroZ']].head(ITEMS)
-    # low_pass_filter_show(accelerometer, gyroscope, timestamp)
-    # low_pass_filter_demo(file)
-    # median_filter_show(accelerometer, gyroscope, timestamp)
-    # median_filter_demo(file)
-    moving_average_demo(file)

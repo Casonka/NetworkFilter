@@ -1,49 +1,26 @@
 # импортируем библиотеки
+import os
+
 import numpy as np
 import pandas as pd
-
 import matplotlib
 from matplotlib import pyplot as plt, transforms
-
 import seaborn as sns
 from matplotlib.patches import Ellipse
-
-sns.set()
-
 import random
-
 from sklearn.linear_model import LinearRegression
 from sklearn.decomposition import PCA
 from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import normalize
 
+
+FILEPATH = "datasets/"
 # инициируем таблицу ошбок среднеквадратичных отклонений
 table_errors_test = pd.DataFrame(index = ['MSE_test'])
 
+
 def confidence_ellipse(x, y, ax, n_std=3.0, facecolor='none', **kwargs):
-    """
-    Create a plot of the covariance confidence ellipse of *x* and *y*.
-
-    Parameters
-    ----------
-    x, y : array-like, shape (n, )
-        Input data.
-
-    ax : matplotlib.axes.Axes
-        The axes object to draw the ellipse into.
-
-    n_std : float
-        The number of standard deviations to determine the ellipse's radiuses.
-
-    **kwargs
-        Forwarded to `~matplotlib.patches.Ellipse`
-
-    Returns
-    -------
-    matplotlib.patches.Ellipse
-    """
     if x.size != y.size:
         raise ValueError("x and y must be the same size")
 
@@ -91,9 +68,9 @@ def draw_graphV1(dataframe):
 
 def draw_graph2(dataframe):
     fig, ax1 = plt.subplots(nrows=1, ncols=1, figsize=(16, 6))
-    dependency_nstd = [[0.8, 0.75],
-                       [-0.2, 0.35]]
-    fig.suptitle('График №2 "Отношение всех параметров к перемещению"', fontsize=14, fontweight='bold')
+    dependency_nstd = [[3.1, 0.5],
+                       [-0.2, 0.4]]
+    fig.suptitle('Отношение всех параметров к перемещению', fontsize=14, fontweight='bold')
     fig.subplots_adjust(top=0.85)
     ax1.scatter(dataframe['gpsY'], dataframe['dX'], color='orange')
     ax1.scatter(dataframe['gpsX'], dataframe['dX'], color='red')
@@ -105,9 +82,9 @@ def draw_graph2(dataframe):
     ax1.scatter(dataframe['accelZ'], dataframe['dX'], color='blue')
     ax1.scatter(dataframe['accelY'], dataframe['dX'], color='pink')
     ax1.scatter(dataframe['accelX'], dataframe['dX'], color='green')
-    mu = 100, 815
-    scale = 12, 25
-    x, y = get_correlated_dataset(1000, dependency_nstd, mu, scale)
+    mu = 100, 822
+    scale = 2, 8
+    x, y = get_correlated_dataset(45000, dependency_nstd, mu, scale)
     confidence_ellipse(x, y, ax1,
                        alpha=0.5, facecolor='pink', edgecolor='red', zorder=0)
     ax1.set_title('Зависимость признаков от перемещения')
@@ -131,22 +108,25 @@ def error(x_train, x_test, y_train, y_test):
     return error
 
 
-if __name__ == '__main__':
-    matplotlib.use('Qt5Agg')
+def rsa_process():
     np.random.seed(0)
-    N = 45000
     mu = np.array((100., 100, 100, 100, 100, 100, 100, 100, 100, 100))
-    accel = pd.read_csv("datasets/dataa_30.0.csv")[['accelX', 'accelY', 'accelZ']].head(N).values / 19.614
-    gyro = pd.read_csv("datasets/dataa_30.0.csv")[['gyroX', 'gyroY', 'gyroZ']].head(N).values / 4.36332 * 57.2958
-    speed = pd.read_csv("datasets/dataa_30.0.csv")[['speed']].head(N).values / 60.
-    compass = pd.read_csv("datasets/dataa_30.0.csv")[['compassAngle']].head(N).values / 3.14157
-    gps = pd.read_csv("datasets/dataa_30.0.csv")[['gpsX', 'gpsY']].head(N).values / 120.
-    data = np.hstack((accel, gyro))
-    data = np.hstack((data, compass))
-    data = np.hstack((data, speed))
-    data = np.hstack((data, gps))
+    data = np.zeros([0, 10])
+    for i, file in enumerate(os.listdir(FILEPATH)):
+        if file.endswith(".csv"):
+            accel = pd.read_csv(FILEPATH + file)[['accelX', 'accelY', 'accelZ']].values / 19.614
+            gyro = pd.read_csv(FILEPATH + file)[['gyroX', 'gyroY', 'gyroZ']].values / 4.36332 * 57.2958
+            speed = pd.read_csv(FILEPATH + file)[['speed']].values / 60.
+            compass = pd.read_csv(FILEPATH + file)[['compassAngle']].values / 3.14157
+            gps = pd.read_csv(FILEPATH + file)[['gpsX', 'gpsY']].values / 120.
+            tmp = np.hstack((accel, gyro))
+            tmp = np.hstack((tmp, compass))
+            tmp = np.hstack((tmp, speed))
+            tmp = np.hstack((tmp, gps))
+            data = np.append(data, tmp, 0)
 
-    cov = np.cov(data.reshape((10, N)))
+    ITEMS = data.shape[0]
+    cov = np.cov(data.reshape((10, ITEMS)))
 
     X12 = np.dot(data, cov) + mu
     x1 = X12[:, 0]
@@ -166,19 +146,19 @@ if __name__ == '__main__':
     r_0 = 0
     R = np.array((1.3, 1.3, 0.8, 0.3, 0.3, 1.0, 0.8, 0.8, 0.8, 0.8))
     R = R.reshape(-1, R.shape[0])
-    e = np.array([random.uniform(-1., 1.) for i in range(N)]).reshape(-1, 1)
+    e = np.array([random.uniform(-1., 1.) for i in range(ITEMS)]).reshape(-1, 1)
     y = r_0 + np.dot(X, R.T) + e
     columns_x = ['accelX', 'accelY', 'accelZ', 'gyroX', 'gyroY', 'gyroZ', 'compass', 'speed', 'gpsX', 'gpsY']
     dataframe = pd.DataFrame(np.hstack((X, y)))
     dataframe.columns = columns_x + ['dX']
 
     #draw_graphV1(dataframe)
-    draw_graph2(dataframe)
+
     #разделим выборку на обучающую и тестовую
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)
 
     # проведем центрирование данных (функция нормирования отключена)
-    scaler = StandardScaler(with_mean = True, with_std = False)
+    scaler = StandardScaler(with_mean=True, with_std = False)
     scaler = scaler.fit(X_train)
     X_train_norm = scaler.transform(X_train)
     X_test_norm = scaler.transform(X_test)
@@ -187,16 +167,17 @@ if __name__ == '__main__':
     model_pca = PCA(n_components=10)
     # обучим модель на обучающей выборке
     model_pca.fit(X_train_norm)
+    #draw_graph2(dataframe)
     # преобразуем данные обучающей выборки
     Z_train_norm = model_pca.transform(X_train_norm)
     # преобразуем данные тестовой выборки
     Z_test_norm = model_pca.transform(X_test_norm)
 
-    argument_1X = np.hstack((X_train_norm[:, :2], X_train_norm[:, 5:6]))
+    argument_1X = X_train_norm[:, :3]
     argument_2X = X_train_norm[:, :7]
     argument_3X = np.hstack((X_train_norm[:, :7], X_train_norm[:, 8:9]))
 
-    argument_1Y = np.hstack((X_test_norm[:, :2], X_test_norm[:, 5:6]))
+    argument_1Y = X_test_norm[:, :3]
     argument_2Y = X_test_norm[:, :7]
     argument_3Y = np.hstack((X_test_norm[:, :7], X_test_norm[:, 8:9]))
 
@@ -210,7 +191,7 @@ if __name__ == '__main__':
 
     # сформируем в pandas таблицу оценок качества модели линейной регрессии в зависимости от используемых признаков
     table_errors_test['All'] = error(X_train_norm, X_test_norm, y_train, y_test)
-    table_errors_test['accelX, accelY, gyroZ'] = error(argument_1X, argument_1Y, y_train, y_test)
+    table_errors_test['accelX, accelY, accelZ'] = error(argument_1X, argument_1Y, y_train, y_test)
     table_errors_test['accelX, accelY, gyroZ + speed'] = error(argument_3X, argument_3Y, y_train, y_test)
     table_errors_test['accelX, accelY, gyroZ + speed + compass'] = error(argument_3X, argument_3Y, y_train, y_test)
     table_errors_test['accel + gyro'] = error(argument_2X, argument_2Y, y_train, y_test)
@@ -220,8 +201,6 @@ if __name__ == '__main__':
     table_errors_test['1,2,6 компоненты'] = error(Z_1X, Z_1Y, y_train, y_test)
     table_errors_test['1 - 6 компоненты'] = error(Z_2X, Z_2Y, y_train, y_test)
     table_errors_test['1 - 7 компоненты'] = error(Z_3X, Z_3Y, y_train, y_test)
-
-
 
     print ('Таблица №1 "Сравнение качества модели линейной регрессии, обученной на различных признаках"')
     pd.set_option('display.max_rows', None)
@@ -295,7 +274,48 @@ if __name__ == '__main__':
     ax.plot(Z_train_norm[:, 0], Z_train_norm[:, 1], 'o', color='green')
     plt.xlabel('1-я компонента')
     plt.ylabel('2-я компонента')
-    #plt.show()
+    plt.show()
 
-    # сохраним график в файл
-    # fig.savefig('graph_4.png')
+
+def fhisher_process(parameter):
+    true_deltaX = np.zeros((0, 1))
+    true_deltaY = np.zeros((0, 1))
+    temp = np.zeros((0, 1))
+    try:
+        temp = pd.read_csv("datasets/dataa_30.0.csv")[[parameter]].values / 120.0
+        true_deltaX = pd.read_csv("datasets/dataa_30.0.csv")[['true_deltaX']].values
+        true_deltaY = pd.read_csv("datasets/dataa_30.0.csv")[['true_deltaY']].values
+        N = temp.shape[0]
+
+        meanA = np.mean(temp)
+        squareA = np.square(temp)
+        meanB = np.mean(true_deltaX)
+        squareB = np.square(true_deltaX)
+        dispA = np.sum((squareA - meanA)) / N
+        dispB = np.sum((squareB - meanB)) / N
+        fhisher_k = dispA**2 / dispB**2
+        print("Проверка нулевой гипотезы точного теста Фишера \r\n")
+        if fhisher_k > 7.56:
+            print("Параметр статистически не связан с перемещением по X")
+            print(str(fhisher_k) + " > " + str(7.56))
+        else:
+            print("Параметр статистически связан с перемещением по X")
+            print(str(fhisher_k) + " < " + str(7.56))
+        meanB = np.mean(true_deltaY)
+        squareB = np.square(true_deltaY)
+        dispB = np.sum((squareB - meanB)) / N
+        fhisher_k = dispA**2 / dispB**2
+        print("Проверка нулевой гипотезы точного теста Фишера \r\n")
+        if fhisher_k > 7.56:
+            print("Параметр статистически не связан с перемещением по Y")
+            print(str(fhisher_k) + " > " + str(7.56))
+        else:
+            print("Параметр статистически связан с перемещением по Y")
+            print(str(fhisher_k) + " < " + str(7.56))
+    except:
+        print("Error parameter name")
+
+
+if __name__ == '__main__':
+    matplotlib.use('Qt5Agg')
+    sns.set()
