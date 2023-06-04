@@ -1,7 +1,7 @@
 {
     "_allocate_inputs": 4,
     "_allocate_outputs": 4,
-    "cli_parameters": "analyze --name network -m C:/Users/Caska/Desktop/projects/Python/NetworkFilter/model/lstm.h5 --type keras --compression none --verbosity 1 --workspace C:\\Users\\Caska\\AppData\\Local\\Temp\\mxAI_workspace153707769943005609910063505233064 --output C:\\Users\\Caska\\.stm32cubemx\\network_output --allocate-inputs --series stm32f4 --allocate-outputs",
+    "cli_parameters": "validate --name network -m C:/Users/Caska/Desktop/projects/Python/NetworkFilter/model/lstm.h5 --type keras --compression medium --verbosity 1 --workspace C:\\Users\\Caska\\AppData\\Local\\Temp\\mxAI_workspace235199594310014750873371900111709 --output C:\\Users\\Caska\\.stm32cubemx\\network_output --allocate-inputs --allocate-outputs",
     "cli_version": {
         "major": 1,
         "micro": 0,
@@ -12,10 +12,10 @@
         "factor": null,
         "layers": {}
     },
-    "date_time": "Sun Jun  4 23:15:01 2023",
+    "date_time": "Sun Jun  4 19:38:30 2023",
     "error": 0,
     "error_str": [],
-    "exec_cmd": "analyze",
+    "exec_cmd": "validate",
     "exec_duration": 0.0,
     "hash": "3a6fbc21f015cc554941894058892614",
     "inputs": [
@@ -165,7 +165,20 @@
         "micro": 1,
         "minor": 0
     },
-    "val_error": -1.0,
-    "val_error_desc": "None (None) #-1",
-    "val_metrics": []
+    "val_error": 9.811439838358638e-08,
+    "val_error_desc": "x-cross (l2r) #1",
+    "val_metrics": [
+        {
+            "acc": "n.a.",
+            "cos": 1.0,
+            "desc": "X-cross #1",
+            "l2r": 9.811439838358638e-08,
+            "mae": 1.4528632519272833e-08,
+            "mean": -3.7252903539730653e-10,
+            "nse": 0.9999999999998926,
+            "rmse": 1.7865865231669886e-08,
+            "std": 1.832600560192077e-08,
+            "ts_name": "dense_4_dense, ai_float, (1,1,1,2), m_id=[3]"
+        }
+    ]
 }

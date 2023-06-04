@@ -43,7 +43,7 @@ TEST_HEAD = 5
 # TEST_HEAD = randint(2, 40)
 # [Convert and visualise features]
 IS_CONVERT_LITE = True
-IS_VISUALISE = True
+IS_VISUALISE = False
 IS_TRAIN = False
 IS_TEST = False
 IS_STATISTIC = False
@@ -258,6 +258,15 @@ def get_lite_model():
             file.write(source_text)
     except IOError:
         print("No such h5 model file")
+    finally:
+        accel = pd.read_csv("datasets/dataa_30.0.csv")[['accelX', 'accelY']].head(50).values / 19.614
+        gyroZ = pd.read_csv("datasets/dataa_30.0.csv")[['gyroZ']].head(50).values / 4.36332
+        true_delta = pd.read_csv("datasets/dataa_30.0.csv")[['true_deltaX', 'true_deltaX']].head(50).values
+
+        out = np.append(accel, gyroZ, 1)
+        # out = np.expand_dims(out, axis=0)
+        np.savetxt("validation_x.csv", out, delimiter=',')
+        np.savetxt("validation_y.csv", true_delta, delimiter=',')
 
 
 # --------------------------------------------------------------------------------------------- #
@@ -273,8 +282,7 @@ if __name__ == '__main__':
     # Prepare and compile model
     # --------------------------------#
     model = get_model()
-    if not IS_TRAIN:
-        visualise_predict(model)
+
     # Prepare train and validation batch generators
     # --------------------------------#
     if IS_TRAIN:

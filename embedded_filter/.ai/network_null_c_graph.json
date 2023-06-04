@@ -3,13 +3,9 @@
     "c_layers": [
         {
             "next": "rnn_3",
-            "rom": 1632,
             "op_by_type": {"smul_f32_f32": 1960},
             "c_forward": "forward_lstm",
-            "c_code_emit": true,
             "macc": 1960,
-            "name": "rnn_2",
-            "c_id": 0,
             "tensors": {
                 "outputs": ["rnn_2_output0"],
                 "inputs": ["input_0_output"],
@@ -21,23 +17,30 @@
                     "rnn_2_bias"
                 ]
             },
+            "layer_type": "lstm",
+            "rom": 1632,
+            "c_code_emit": true,
+            "exec_time": {
+                "duration_ms": 0.009875000338070095,
+                "counters": [],
+                "percentage": 60.769230507468514,
+                "cycles_by_macc": 0,
+                "cycles": 0
+            },
+            "name": "rnn_2",
+            "c_id": 0,
             "weight_sparsity": [
                 0.05882352941176472,
                 408,
                 24
             ],
-            "layer_type": "lstm",
             "m_id": 0
         },
         {
             "next": "dense_4_dense",
-            "rom": 1512,
             "op_by_type": {"smul_f32_f32": 1830},
             "c_forward": "forward_lstm",
-            "c_code_emit": true,
             "macc": 1830,
-            "name": "rnn_3",
-            "c_id": 1,
             "tensors": {
                 "outputs": ["rnn_3_output0"],
                 "inputs": ["rnn_2_output0"],
@@ -49,23 +52,30 @@
                     "rnn_3_bias"
                 ]
             },
+            "layer_type": "lstm",
+            "rom": 1512,
+            "c_code_emit": true,
+            "exec_time": {
+                "duration_ms": 0.0053750002407468855,
+                "counters": [],
+                "percentage": 33.076923283577486,
+                "cycles_by_macc": 0,
+                "cycles": 0
+            },
+            "name": "rnn_3",
+            "c_id": 1,
             "weight_sparsity": [
                 0.04761904761904767,
                 378,
                 18
             ],
-            "layer_type": "lstm",
             "m_id": 2
         },
         {
             "next": "dense_4_dense",
-            "rom": 56,
             "op_by_type": {"smul_f32_f32": 14},
             "c_forward": "forward_dense",
-            "c_code_emit": true,
             "macc": 14,
-            "name": "dense_4_dense",
-            "c_id": 2,
             "tensors": {
                 "outputs": ["dense_4_dense_output"],
                 "inputs": ["rnn_3_output0"],
@@ -75,12 +85,23 @@
                     "dense_4_dense_bias"
                 ]
             },
+            "layer_type": "dense",
+            "rom": 56,
+            "c_code_emit": true,
+            "exec_time": {
+                "duration_ms": 0.0010000000474974513,
+                "counters": [],
+                "percentage": 6.153846208953996,
+                "cycles_by_macc": 0,
+                "cycles": 0
+            },
+            "name": "dense_4_dense",
+            "c_id": 2,
             "weight_sparsity": [
                 0,
                 14,
                 0
             ],
-            "layer_type": "dense",
             "m_id": 3
         }
     ],
@@ -91,8 +112,8 @@
             "allocate-inputs",
             "allocate-outputs"
         ],
-        "compression": "none",
-        "target": "stm32f4"
+        "compression": "medium",
+        "target": "generic"
     },
     "inputs": ["input_0_output"],
     "macc": 3804,
@@ -516,7 +537,7 @@
         }
     ],
     "c_activations_count": 1,
-    "date_time": "Sun Jun  4 23:15:01 2023",
+    "date_time": "Sun Jun  4 19:38:30 2023",
     "model_name": "lstm",
     "tool_version": {
         "major": 1,
@@ -534,10 +555,8 @@
     "c_weights_count": 1,
     "weights": {"weights_array": {
         "buffer_data_size": 3200,
-        "buffer_crc": 0,
         "pool_size": 3200,
-        "buffer_c_type": "u64",
-        "buffer_c_name": "s_network_weights_array_u64",
+        "buffer_c_name": "NULL",
         "buffer_offsets": [
             {
                 "lite_tag": null,
@@ -610,10 +629,8 @@
                 "buffer_name": "rnn_2_bias_array"
             }
         ],
-        "buffer_c_name_addr": "s_network_weights_array_u64",
-        "buffer_c_count": 400,
-        "pool_id": 0,
-        "buffer_c_data": []
+        "buffer_c_name_addr": "NULL",
+        "pool_id": 0
     }},
     "memory_footprint": {
         "kernel_ram": 2060,
@@ -622,12 +639,9 @@
             0,
             0
         ],
-        "series": "stm32f4",
+        "series": "generic",
         "activations": 444,
-        "toolchain_flash": 1384,
-        "toolchain_ram": 0,
-        "weights": 3200,
-        "toolchain": "arm-none-eabi-gcc (GNU Tools for STM32 10.3-2021.10.20211105-1100) 10.3.1 20210824 (release)"
+        "weights": 3200
     },
     "version": "1.2",
     "tool_api_version": {
@@ -688,6 +702,12 @@
         "buffer_c_name_addr": "NULL",
         "pool_id": 0
     }},
+    "exec_time": {
+        "duration_ms": 0.01625000062631443,
+        "cycles_by_macc": 0,
+        "cycles": 0,
+        "device": "AMD64 AMD64 Family 23 Model 113 Stepping 0, AuthenticAMD (Windows)"
+    },
     "c_arrays_n": 16,
     "c_name": "network",
     "memory_pools": []
